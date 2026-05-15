@@ -1,0 +1,22 @@
+{
+  "placeholderImages": [
+    {
+      "id": "hero-bg",
+      "description": "Professional office environment with data visualization",
+      "imageUrl": "https://picsum.photos/seed/amec1/1200/800",
+      "imageHint": "office workspace"
+    },
+    {
+      "id": "avatar-admin",
+      "description": "Administrator profile picture",
+      "imageUrl": "https://picsum.photos/seed/admin/200/200",
+      "imageHint": "business person"
+    },
+    {
+      "id": "avatar-sales",
+      "description": "Salesperson profile picture",
+      "imageUrl": "https://picsum.photos/seed/sales/200/200",
+      "imageHint": "smiling person"
+    }
+  ]
+}

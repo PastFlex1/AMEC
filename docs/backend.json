@@ -1,0 +1,113 @@
+
+{
+  "entities": {
+    "Product": {
+      "title": "Producto",
+      "description": "Un producto o servicio en el catálogo.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Nombre del producto." },
+        "price": { "type": "number", "description": "Precio final con IVA incluido." }
+      },
+      "required": ["name", "price"]
+    },
+    "Customer": {
+      "title": "Cliente",
+      "description": "Información del cliente o prospecto.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "ruc": { "type": "string" },
+        "address": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "status": { "type": "string", "enum": ["Activo", "Inactivo", "Pendiente"] }
+      },
+      "required": ["name", "ruc"]
+    },
+    "Invoice": {
+      "title": "Factura",
+      "description": "Documento de factura electrónica según estructura SRI.",
+      "type": "object",
+      "properties": {
+        "invoiceNumber": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "claveAcceso": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "paymentMethod": { "type": "string" },
+        "total": { "type": "number" },
+        "status": { "type": "string" },
+        "observations": { "type": "string" }
+      }
+    },
+    "Proforma": {
+      "title": "Proforma",
+      "description": "Cotización comercial previa a la factura.",
+      "type": "object",
+      "properties": {
+        "proformaNumber": { "type": "string", "description": "Número secuencial 003-001-XXXXXXXXX" },
+        "customerName": { "type": "string" },
+        "total": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "status": { "type": "string" },
+        "observations": { "type": "string" }
+      }
+    },
+    "SalesNote": {
+      "title": "Nota de Venta",
+      "description": "Registro de venta interna sin validez fiscal inmediata.",
+      "type": "object",
+      "properties": {
+        "noteNumber": { "type": "string", "description": "Número secuencial 002-001-XXXXXXXXX" },
+        "customerName": { "type": "string" },
+        "total": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "status": { "type": "string" },
+        "observations": { "type": "string" }
+      }
+    },
+    "Salesperson": {
+      "title": "Vendedor",
+      "description": "Personal de ventas con acceso al sistema.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "password": { "type": "string" },
+        "status": { "type": "string", "enum": ["Activo", "Inactivo"] }
+      },
+      "required": ["name", "email", "password"]
+    }
+  },
+  "auth": {
+    "providers": ["google.com", "password"]
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Colección de productos del catálogo."
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Directorio de clientes."
+    },
+    "/invoices/{invoiceId}": {
+      "schema": "Invoice",
+      "description": "Registro de facturas emitidas."
+    },
+    "/proformas/{proformaId}": {
+      "schema": "Proforma",
+      "description": "Registro de cotizaciones/proformas."
+    },
+    "/salesNotes/{salesNoteId}": {
+      "schema": "SalesNote",
+      "description": "Registro de notas de venta internas."
+    },
+    "/salespeople/{salespersonId}": {
+      "schema": "Salesperson",
+      "description": "Registro de vendedores conectados a Firestore."
+    }
+  }
+}

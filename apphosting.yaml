@@ -1,0 +1,9 @@
+# Settings to manage and configure a Firebase App Hosting backend.
+
+runConfig:
+  maxInstances: 1
+
+build:
+  commands:
+    - npm install
+    - npm run build
