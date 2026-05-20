@@ -68,8 +68,66 @@ export default function CashRegisterPage() {
   const loadData = async () => {
     setLoading(true);
     try {
+      // TODOS los usuarios cargan sus propios cierres para poder cerrar caja
+      const qClosings = query(collection(db, "cashClosings"), where("sellerName", "==", userName));
+      const snapClosings = await getDocs(qClosings);
+      const closings = snapClosings.docs.map(d => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => {
+        const tA = a.closingDate?.toMillis() || 0;
+        const tB = b.closingDate?.toMillis() || 0;
+        return tB - tA;
+      });
+      setMyClosings(closings);
+
+      const lastClosing: any = closings[0]; // because it's sorted desc
+      const lastClosingTime = lastClosing?.closingDate?.toMillis() || 0;
+
+      // Load invoices and notes for current user
+      const qInvoices = query(collection(db, "invoices"), where("createdBy", "==", userName));
+      const snapInvoices = await getDocs(qInvoices);
+      const newInvoices = snapInvoices.docs.map(d => d.data()).filter((d: any) => d.createdAt && d.createdAt.toMillis() > lastClosingTime && d.status === "Autorizado");
+
+      const qNotes = query(collection(db, "salesNotes"), where("createdBy", "==", userName));
+      const snapNotes = await getDocs(qNotes);
+      const newNotes = snapNotes.docs.map(d => d.data()).filter((d: any) => d.createdAt && d.createdAt.toMillis() > lastClosingTime && d.status !== "Anulado");
+
+      let cash = 0; let transfers = 0; let cards = 0; let totalAmount = 0;
+      let documents: any[] = [];
+      
+      const processDocs = (docs: any[], typeName: string, idField: string, useDepositOnly: boolean = false) => {
+        docs.forEach(doc => {
+          const method = doc.clientData?.paymentMethod || "01";
+          const amount = useDepositOnly ? (doc.deposit || 0) : (doc.total || 0);
+          totalAmount += amount;
+          if (method === "01") cash += amount;
+          else if (method === "16" || method === "18" || method === "19") cards += amount;
+          else if (method === "20") transfers += amount;
+          else cash += amount; // default others to cash
+          
+          documents.push({
+            type: typeName,
+            num: doc[idField] || "S/N",
+            amount: amount,
+            client: doc.clientData?.name || doc.customerName || "Consumidor Final"
+          });
+        });
+      };
+
+      processDocs(newInvoices, "Factura", "invoiceNumber");
+      processDocs(newNotes, "Nota de Venta", "noteNumber");
+
+      setShiftStats({
+        totalAmount,
+        cash,
+        transfers,
+        cards,
+        invoicesCount: newInvoices.length,
+        notesCount: newNotes.length,
+        lastClosingDate: lastClosing ? lastClosing.closingDate.toDate() : null,
+        documents
+      });
+
       if (role === 'admin') {
-        // Admin loads all closings
+        // Admin also loads all closings to view the global history
         const q = query(collection(db, "cashClosings"));
         const snap = await getDocs(q);
         const docs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => {
@@ -78,64 +136,6 @@ export default function CashRegisterPage() {
           return tB - tA;
         });
         setAllClosings(docs);
-      } else {
-        // Sales loads their own closings
-        const qClosings = query(collection(db, "cashClosings"), where("sellerName", "==", userName));
-        const snapClosings = await getDocs(qClosings);
-        const closings = snapClosings.docs.map(d => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => {
-          const tA = a.closingDate?.toMillis() || 0;
-          const tB = b.closingDate?.toMillis() || 0;
-          return tB - tA;
-        });
-        setMyClosings(closings);
-
-        const lastClosing: any = closings[0]; // because it's sorted desc
-        const lastClosingTime = lastClosing?.closingDate?.toMillis() || 0;
-
-        // Load invoices and notes for current user
-        const qInvoices = query(collection(db, "invoices"), where("createdBy", "==", userName));
-        const snapInvoices = await getDocs(qInvoices);
-        const newInvoices = snapInvoices.docs.map(d => d.data()).filter((d: any) => d.createdAt && d.createdAt.toMillis() > lastClosingTime && d.status === "Autorizado");
-
-        const qNotes = query(collection(db, "salesNotes"), where("createdBy", "==", userName));
-        const snapNotes = await getDocs(qNotes);
-        const newNotes = snapNotes.docs.map(d => d.data()).filter((d: any) => d.createdAt && d.createdAt.toMillis() > lastClosingTime && d.status !== "Anulado");
-
-        let cash = 0; let transfers = 0; let cards = 0; let totalAmount = 0;
-        let documents: any[] = [];
-        
-        const processDocs = (docs: any[], typeName: string, idField: string, useDepositOnly: boolean = false) => {
-          docs.forEach(doc => {
-            const method = doc.clientData?.paymentMethod || "01";
-            const amount = useDepositOnly ? (doc.deposit || 0) : (doc.total || 0);
-            totalAmount += amount;
-            if (method === "01") cash += amount;
-            else if (method === "16" || method === "18" || method === "19") cards += amount;
-            else if (method === "20") transfers += amount;
-            else cash += amount; // default others to cash
-            
-            documents.push({
-              type: typeName,
-              num: doc[idField] || "S/N",
-              amount: amount,
-              client: doc.clientData?.name || doc.customerName || "Consumidor Final"
-            });
-          });
-        };
-
-        processDocs(newInvoices, "Factura", "invoiceNumber");
-        processDocs(newNotes, "Nota de Venta", "noteNumber");
-
-        setShiftStats({
-          totalAmount,
-          cash,
-          transfers,
-          cards,
-          invoicesCount: newInvoices.length,
-          notesCount: newNotes.length,
-          lastClosingDate: lastClosing ? lastClosing.closingDate.toDate() : null,
-          documents
-        });
       }
     } catch (e) {
       console.error(e);
@@ -182,62 +182,62 @@ export default function CashRegisterPage() {
         <p className="text-muted-foreground">Gestión y control de ventas por turno.</p>
       </div>
 
-      {role === 'sales' ? (
-        <div className="space-y-8">
-          {/* VISTA VENDEDOR */}
-          <Card className="border-none shadow-xl bg-gradient-to-br from-[#2988a3] to-[#1f6a80] text-white rounded-3xl overflow-hidden">
-            <CardContent className="p-8 md:p-12">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-                <div className="space-y-2">
-                  <h2 className="text-xl font-medium text-white/80">Total del Turno Actual</h2>
-                  <div className="text-5xl md:text-7xl font-black font-mono tracking-tighter">
-                    ${shiftStats.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </div>
-                  <div className="flex items-center gap-2 text-white/70 text-sm mt-4">
-                    <Calendar className="h-4 w-4" />
-                    Desde: {shiftStats.lastClosingDate ? format(shiftStats.lastClosingDate, "dd/MM/yyyy HH:mm", { locale: es }) : 'El primer registro de ventas'}
-                  </div>
+      <div className="space-y-8">
+        {/* VISTA DE CIERRE PARA TODOS (Vendedores y Admin) */}
+        <Card className="border-none shadow-xl bg-gradient-to-br from-[#2988a3] to-[#1f6a80] text-white rounded-3xl overflow-hidden">
+          <CardContent className="p-8 md:p-12">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
+              <div className="space-y-2">
+                <h2 className="text-xl font-medium text-white/80">Total de Mi Turno Actual</h2>
+                <div className="text-5xl md:text-7xl font-black font-mono tracking-tighter">
+                  ${shiftStats.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
-
-                <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
-                  <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-                    <div className="flex items-center gap-2 text-white/80 mb-2">
-                      <Banknote className="h-4 w-4" /> <span className="text-xs font-bold uppercase tracking-wider">Efectivo</span>
-                    </div>
-                    <div className="text-2xl font-black">${shiftStats.cash.toFixed(2)}</div>
-                  </div>
-                  <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-                    <div className="flex items-center gap-2 text-white/80 mb-2">
-                      <ArrowRightLeft className="h-4 w-4" /> <span className="text-xs font-bold uppercase tracking-wider">Transfer.</span>
-                    </div>
-                    <div className="text-2xl font-black">${shiftStats.transfers.toFixed(2)}</div>
-                  </div>
-                  <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
-                    <div className="flex items-center gap-2 text-white/80 mb-2">
-                      <CreditCard className="h-4 w-4" /> <span className="text-xs font-bold uppercase tracking-wider">Tarjetas</span>
-                    </div>
-                    <div className="text-2xl font-black">${shiftStats.cards.toFixed(2)}</div>
-                  </div>
-                  <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 flex flex-col justify-center items-center text-center">
-                    <div className="text-xs font-bold uppercase tracking-wider text-white/80 mb-1">Documentos</div>
-                    <div className="text-sm font-bold">{shiftStats.invoicesCount} Fact. / {shiftStats.notesCount} Notas</div>
-                  </div>
+                <div className="flex items-center gap-2 text-white/70 text-sm mt-4">
+                  <Calendar className="h-4 w-4" />
+                  Desde: {shiftStats.lastClosingDate ? format(shiftStats.lastClosingDate, "dd/MM/yyyy HH:mm", { locale: es }) : 'El primer registro de ventas'}
                 </div>
               </div>
 
-              <div className="mt-12 pt-8 border-t border-white/20 flex justify-end">
-                <Button 
-                  onClick={handleCloseRegister}
-                  disabled={saving || shiftStats.totalAmount === 0}
-                  className="bg-white text-[#2988a3] hover:bg-white/90 h-14 px-8 rounded-2xl font-black text-lg shadow-2xl"
-                >
-                  {saving ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Wallet className="h-5 w-5 mr-2" />}
-                  Cerrar Caja Ahora
-                </Button>
+              <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                  <div className="flex items-center gap-2 text-white/80 mb-2">
+                    <Banknote className="h-4 w-4" /> <span className="text-xs font-bold uppercase tracking-wider">Efectivo</span>
+                  </div>
+                  <div className="text-2xl font-black">${shiftStats.cash.toFixed(2)}</div>
+                </div>
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                  <div className="flex items-center gap-2 text-white/80 mb-2">
+                    <ArrowRightLeft className="h-4 w-4" /> <span className="text-xs font-bold uppercase tracking-wider">Transfer.</span>
+                  </div>
+                  <div className="text-2xl font-black">${shiftStats.transfers.toFixed(2)}</div>
+                </div>
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                  <div className="flex items-center gap-2 text-white/80 mb-2">
+                    <CreditCard className="h-4 w-4" /> <span className="text-xs font-bold uppercase tracking-wider">Tarjetas</span>
+                  </div>
+                  <div className="text-2xl font-black">${shiftStats.cards.toFixed(2)}</div>
+                </div>
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 flex flex-col justify-center items-center text-center">
+                  <div className="text-xs font-bold uppercase tracking-wider text-white/80 mb-1">Documentos</div>
+                  <div className="text-sm font-bold">{shiftStats.invoicesCount} Fact. / {shiftStats.notesCount} Notas</div>
+                </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
+            <div className="mt-12 pt-8 border-t border-white/20 flex justify-end">
+              <Button 
+                onClick={handleCloseRegister}
+                disabled={saving || shiftStats.totalAmount === 0}
+                className="bg-white text-[#2988a3] hover:bg-white/90 h-14 px-8 rounded-2xl font-black text-lg shadow-2xl"
+              >
+                {saving ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Wallet className="h-5 w-5 mr-2" />}
+                Cerrar Caja Ahora
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {role === 'sales' ? (
           <Card className="border-none shadow-xl bg-white rounded-3xl overflow-hidden">
             <CardHeader className="bg-slate-50/50 border-b">
               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -285,10 +285,7 @@ export default function CashRegisterPage() {
               </Table>
             </CardContent>
           </Card>
-        </div>
-      ) : (
-        <div className="space-y-8">
-          {/* VISTA ADMIN */}
+        ) : (
           <Card className="border-none shadow-xl bg-white rounded-3xl overflow-hidden">
             <CardHeader className="bg-slate-900 border-b text-white p-8">
               <h3 className="text-2xl font-black flex items-center gap-3">
@@ -345,8 +342,8 @@ export default function CashRegisterPage() {
               </Table>
             </CardContent>
           </Card>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* MODAL PARA VER DOCUMENTOS */}
       <Dialog open={selectedClosingDocs !== null} onOpenChange={(open) => !open && setSelectedClosingDocs(null)}>

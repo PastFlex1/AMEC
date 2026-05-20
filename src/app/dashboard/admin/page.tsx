@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { LowStockProducts } from "@/components/dashboard/low-stock-products";
 import { 
   TrendingUp, 
   Users, 
@@ -245,6 +246,9 @@ export default function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
+      </div>
+      <div className="grid grid-cols-1 gap-8">
+        <LowStockProducts />
       </div>
     </div>
   );

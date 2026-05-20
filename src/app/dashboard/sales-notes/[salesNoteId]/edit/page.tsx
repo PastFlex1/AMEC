@@ -132,7 +132,17 @@ export default function EditSalesNotePage() {
   }, [availableProducts, productSearch]);
 
   const handleSelectProduct = (itemId: string, product: any) => {
-    setItems(items.map(item => item.id === itemId ? { ...item, description: product.name, unitPrice: product.price } : item));
+    if (product.stock !== undefined && product.stock <= 0) {
+      toast({ title: "Producto Agotado", description: `El producto ${product.name} no tiene stock disponible.`, variant: "destructive" });
+      return;
+    }
+    const currentItem = items.find(i => i.id === itemId);
+    const currentQty = currentItem?.quantity || 1;
+    const newQty = (product.stock !== undefined && currentQty > product.stock) ? product.stock : currentQty;
+    if (newQty < currentQty) {
+       toast({ title: "Stock Insuficiente", description: `Se ajustó la cantidad a ${newQty} unidades.`, variant: "destructive" });
+    }
+    setItems(items.map(item => item.id === itemId ? { ...item, description: product.name, unitPrice: product.price, productId: product.id, maxStock: product.stock !== undefined ? product.stock : null, quantity: newQty } : item));
     setProductSearch("");
     setOpenPopoverId(null);
   };
@@ -345,7 +355,11 @@ export default function EditSalesNotePage() {
                         <div className="max-h-[250px] overflow-y-auto">
                           {filteredProducts.map((p: any) => (
                             <button key={p.id} className="w-full text-left px-4 py-3 hover:bg-slate-50 flex justify-between border-b" onClick={() => { handleSelectProduct(item.id || idx, p); }}>
-                              <span className="font-bold">{p.name}</span><span className="text-[#2988a3] font-black">${p.price.toFixed(2)}</span>
+                              <span className="font-bold">{p.name}</span>
+                              <div className="flex gap-2 items-center">
+                                {p.stock !== undefined && <span className={cn("text-[10px] font-black px-2 py-1 rounded uppercase tracking-widest", p.stock <= 10 ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700")}>Stock: {p.stock}</span>}
+                                <span className="text-[#2988a3] font-black">${p.price.toFixed(2)}</span>
+                              </div>
                             </button>
                           ))}
                         </div>
@@ -355,8 +369,13 @@ export default function EditSalesNotePage() {
                   <div className="w-full md:w-24 space-y-2">
                     <Label className="text-[10px] uppercase font-bold text-slate-400">Cant.</Label>
                     <Input type="number" value={item.quantity} onChange={(e) => {
+                      let val = parseFloat(e.target.value) || 0;
+                      if (item.maxStock !== null && val > item.maxStock) {
+                        toast({ title: "Stock Insuficiente", description: `Solo hay ${item.maxStock} unidades en inventario.`, variant: "destructive" });
+                        val = item.maxStock;
+                      }
                       const newItems = [...items];
-                      newItems[idx].quantity = parseFloat(e.target.value) || 0;
+                      newItems[idx].quantity = val;
                       setItems(newItems);
                     }} className="h-11 text-center font-bold bg-white" />
                   </div>

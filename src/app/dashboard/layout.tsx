@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from 'next/image';
 import { SidebarProvider, Sidebar, SidebarContent, SidebarHeader, SidebarFooter, SidebarInset, SidebarInput, SidebarTrigger } from "@/components/ui/sidebar";
 import { SidebarNav } from "@/components/dashboard/sidebar-nav";
+import { PendingCashClosingModal } from "@/components/dashboard/pending-cash-closing-modal";
 import { LogOut, Search, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -175,6 +176,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </footer>
       </SidebarInset>
+      <PendingCashClosingModal />
     </SidebarProvider>
   );
 }

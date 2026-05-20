@@ -3,6 +3,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { LowStockProducts } from "@/components/dashboard/low-stock-products";
 import { 
   Target, 
   Users, 
@@ -242,6 +243,9 @@ export default function SalesDashboard() {
             </div>
           </CardContent>
         </Card>
+      </div>
+      <div className="grid grid-cols-1 gap-8 mt-8">
+        <LowStockProducts />
       </div>
       <div className="text-center pt-8 border-t border-slate-100">
         <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Desarrollado por Palma Nexus Solutions</p>

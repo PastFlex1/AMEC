@@ -432,7 +432,18 @@ export default function NewSalesNotePage() {
                         <div className="p-2"><Input placeholder="Filtrar..." value={productSearch} onChange={(e) => setProductSearch(e.target.value)} /></div>
                         <div className="max-h-[250px] overflow-y-auto">
                           {filteredProducts.map((p: any) => (
-                            <button key={p.id} className="w-full text-left px-4 py-3 hover:bg-slate-50 flex justify-between border-b items-center" onClick={() => { setItems(items.map(i => i.id === item.id ? { ...i, description: p.name, unitPrice: p.price, productId: p.id, maxStock: p.stock !== undefined ? p.stock : null } : i)); setOpenPopoverId(null); }}>
+                            <button key={p.id} className="w-full text-left px-4 py-3 hover:bg-slate-50 flex justify-between border-b items-center" onClick={() => { 
+                              if (p.stock !== undefined && p.stock <= 0) {
+                                toast({ title: "Producto Agotado", description: `El producto ${p.name} no tiene stock disponible.`, variant: "destructive" });
+                                return;
+                              }
+                              const newQty = (p.stock !== undefined && item.quantity > p.stock) ? p.stock : item.quantity;
+                              if (newQty < item.quantity) {
+                                 toast({ title: "Stock Insuficiente", description: `Se ajustó la cantidad a ${newQty} unidades.`, variant: "destructive" });
+                              }
+                              setItems(items.map(i => i.id === item.id ? { ...i, description: p.name, unitPrice: p.price, productId: p.id, maxStock: p.stock !== undefined ? p.stock : null, quantity: newQty } : i)); 
+                              setOpenPopoverId(null); 
+                            }}>
                               <span className="font-bold">{p.name}</span>
                               <div className="flex gap-2 items-center">
                                 {p.stock !== undefined && <span className={cn("text-[10px] font-black px-2 py-1 rounded uppercase tracking-widest", p.stock <= 10 ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700")}>Stock: {p.stock}</span>}

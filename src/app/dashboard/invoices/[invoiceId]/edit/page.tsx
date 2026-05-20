@@ -584,12 +584,25 @@ export default function EditInvoicePage() {
                             <div className="max-h-[250px] overflow-y-auto">
                               {filteredProducts.map((p: any) => (
                                 <button key={p.id} className="w-full text-left px-4 py-3 text-sm hover:bg-primary/5 flex items-center justify-between border-b last:border-0" onClick={() => {
+                                  if (p.stock !== undefined && p.stock <= 0) {
+                                    toast({ title: "Producto Agotado", description: `El producto ${p.name} no tiene stock disponible.`, variant: "destructive" });
+                                    return;
+                                  }
+                                  const currentQty = items[idx].quantity || 1;
+                                  const newQty = (p.stock !== undefined && currentQty > p.stock) ? p.stock : currentQty;
+                                  if (newQty < currentQty) {
+                                     toast({ title: "Stock Insuficiente", description: `Se ajustó la cantidad a ${newQty} unidades.`, variant: "destructive" });
+                                  }
                                   const newItems = [...items];
-                                  newItems[idx] = { ...newItems[idx], description: p.name, unitPrice: p.price };
+                                  newItems[idx] = { ...newItems[idx], description: p.name, unitPrice: p.price, productId: p.id, maxStock: p.stock !== undefined ? p.stock : null, quantity: newQty };
                                   setItems(newItems);
                                   setOpenPopoverId(null);
                                 }}>
-                                  <span className="font-bold text-slate-700">{p.name}</span><span className="text-xs font-black text-primary bg-primary/5 px-2 py-1 rounded">${p.price.toFixed(2)}</span>
+                                  <span className="font-bold text-slate-700">{p.name}</span>
+                                  <div className="flex gap-2 items-center">
+                                    {p.stock !== undefined && <span className={cn("text-[10px] font-black px-2 py-1 rounded uppercase tracking-widest", p.stock <= 10 ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700")}>Stock: {p.stock}</span>}
+                                    <span className="text-xs font-black text-primary bg-primary/5 px-2 py-1 rounded">${p.price.toFixed(2)}</span>
+                                  </div>
                                 </button>
                               ))}
                             </div>
@@ -599,7 +612,14 @@ export default function EditInvoicePage() {
                         <div className="h-11 px-3 bg-white border border-slate-100 rounded-md flex items-center text-sm font-medium text-slate-700">{item.description}</div>
                       )}
                     </div>
-                    <div className="w-24 space-y-2"><Label className="text-[10px] font-black uppercase text-slate-400">Cant.</Label><Input type="number" value={item.quantity} disabled={isReadOnly} onChange={e => { const newItems = [...items]; newItems[idx].quantity = parseFloat(e.target.value) || 0; setItems(newItems); }} className="h-11 bg-white text-center" /></div>
+                    <div className="w-24 space-y-2"><Label className="text-[10px] font-black uppercase text-slate-400">Cant.</Label><Input type="number" value={item.quantity} disabled={isReadOnly} onChange={e => { 
+                      let val = parseFloat(e.target.value) || 0;
+                      if (item.maxStock !== null && val > item.maxStock) {
+                        toast({ title: "Stock Insuficiente", description: `Solo hay ${item.maxStock} unidades en inventario.`, variant: "destructive" });
+                        val = item.maxStock;
+                      }
+                      const newItems = [...items]; newItems[idx].quantity = val; setItems(newItems); 
+                    }} className="h-11 bg-white text-center font-bold" /></div>
                     <div className="w-32 space-y-2"><Label className="text-[10px] font-black uppercase text-slate-400">P. Final</Label><Input type="number" value={item.unitPrice} disabled={isReadOnly} onChange={e => { const newItems = [...items]; newItems[idx].unitPrice = parseFloat(e.target.value) || 0; setItems(newItems); }} className="h-11 bg-white text-right font-black text-primary" /></div>
                     {!isReadOnly && <div className="flex items-end"><Button variant="ghost" size="icon" onClick={() => setItems(items.filter((_, i) => i !== idx))} className="text-rose-500 h-11 w-11"><Trash2 className="h-5 w-5" /></Button></div>}
                   </div>

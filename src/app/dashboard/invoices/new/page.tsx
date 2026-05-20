@@ -583,7 +583,15 @@ export default function NewInvoicePage() {
                             <div className="max-h-[250px] overflow-y-auto">
                               {filteredProducts.map((p: any) => (
                                 <button key={p.id} className="w-full text-left px-4 py-3 text-sm hover:bg-primary/5 flex items-center justify-between border-b last:border-0" onClick={() => { 
-                                  setItems(items.map(i => i.id === item.id ? { ...i, description: p.name, unitPrice: p.price, productId: p.id, maxStock: p.stock !== undefined ? p.stock : null } : i)); 
+                                  if (p.stock !== undefined && p.stock <= 0) {
+                                    toast({ title: "Producto Agotado", description: `El producto ${p.name} no tiene stock disponible.`, variant: "destructive" });
+                                    return;
+                                  }
+                                  const newQty = (p.stock !== undefined && item.quantity > p.stock) ? p.stock : item.quantity;
+                                  if (newQty < item.quantity) {
+                                     toast({ title: "Stock Insuficiente", description: `Se ajustó la cantidad a ${newQty} unidades.`, variant: "destructive" });
+                                  }
+                                  setItems(items.map(i => i.id === item.id ? { ...i, description: p.name, unitPrice: p.price, productId: p.id, maxStock: p.stock !== undefined ? p.stock : null, quantity: newQty } : i)); 
                                   setOpenPopoverId(null); 
                                 }}>
                                   <span className="font-bold text-slate-700">{p.name}</span>
