@@ -551,7 +551,7 @@ export default function InvoicesPage() {
                                 </Link>
                               </DropdownMenuItem>
                               
-                              {(!isAuthorized && !isAnnulled) && (
+                              {(userRole === 'admin' && !isAuthorized && !isAnnulled) && (
                                 <>
                                   <DropdownMenuSeparator className="my-2" />
                                   <DropdownMenuItem 

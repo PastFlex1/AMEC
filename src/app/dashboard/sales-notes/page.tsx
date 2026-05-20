@@ -401,13 +401,17 @@ export default function SalesNotesPage() {
                             >
                               <CreditCard className="mr-2 h-4 w-4" /> Registrar Pago
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              className="cursor-pointer text-destructive focus:bg-destructive/5 font-bold" 
-                              onSelect={(e) => { e.preventDefault(); setNoteToDelete(note.id); }}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" /> Eliminar Nota
-                            </DropdownMenuItem>
+                            {userRole === 'admin' && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  className="cursor-pointer text-destructive focus:bg-destructive/5 font-bold" 
+                                  onSelect={(e) => { e.preventDefault(); setNoteToDelete(note.id); }}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" /> Eliminar Nota
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

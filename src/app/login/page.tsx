@@ -31,7 +31,7 @@ export default function LoginPage() {
 
     try {
       if (role === 'admin') {
-        if (email === 'admin@amec.com' && password === 'admin123') {
+        if (email === 'amec@administrador.com' && password === 'amec123') {
           localStorage.setItem('amec_user_role', 'admin');
           localStorage.setItem('amec_user_name', 'Administrador');
           router.push('/dashboard/admin');
@@ -272,10 +272,6 @@ export default function LoginPage() {
         </Tabs>
 
         <div className="text-center space-y-4">
-          <div className="text-[11px] text-muted-foreground/60 space-y-1 bg-white/30 backdrop-blur-sm p-3 rounded-xl border border-white/50">
-            <p className="font-bold text-primary/80 uppercase tracking-widest">Modo Demostración</p>
-            <p>Admin: admin@amec.com / admin123</p>
-          </div>
           <div className="pt-4 border-t border-muted/20">
             <p className="text-[10px] font-black uppercase text-slate-400/80 tracking-widest">
               Desarrollado por Palma Nexus Solutions

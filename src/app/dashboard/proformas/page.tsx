@@ -383,13 +383,17 @@ export default function ProformasPage() {
                             >
                               <CreditCard className="mr-3 h-4 w-4 text-indigo-600" /> Registrar Pago
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator className="my-2 bg-gray-50" />
-                            <DropdownMenuItem 
-                              className="rounded-xl cursor-pointer py-3 text-destructive hover:bg-rose-50 focus:bg-rose-50 font-bold" 
-                              onSelect={(e) => { e.preventDefault(); setProformaToDelete(prof.id); }}
-                            >
-                              <Trash2 className="mr-3 h-4 w-4" /> Eliminar Proforma
-                            </DropdownMenuItem>
+                            {userRole === 'admin' && (
+                              <>
+                                <DropdownMenuSeparator className="my-2 bg-gray-50" />
+                                <DropdownMenuItem 
+                                  className="rounded-xl cursor-pointer py-3 text-destructive hover:bg-rose-50 focus:bg-rose-50 font-bold" 
+                                  onSelect={(e) => { e.preventDefault(); setProformaToDelete(prof.id); }}
+                                >
+                                  <Trash2 className="mr-3 h-4 w-4" /> Eliminar Proforma
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
