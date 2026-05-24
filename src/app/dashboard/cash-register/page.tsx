@@ -72,23 +72,27 @@ export default function CashRegisterPage() {
       const qClosings = query(collection(db, "cashClosings"), where("sellerName", "==", userName));
       const snapClosings = await getDocs(qClosings);
       const closings = snapClosings.docs.map(d => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => {
-        const tA = a.closingDate?.toMillis() || 0;
-        const tB = b.closingDate?.toMillis() || 0;
+        const tA = a.closingDate && typeof a.closingDate.toMillis === 'function' ? a.closingDate.toMillis() : (a.closingDate ? Date.now() : 0);
+        const tB = b.closingDate && typeof b.closingDate.toMillis === 'function' ? b.closingDate.toMillis() : (b.closingDate ? Date.now() : 0);
         return tB - tA;
       });
       setMyClosings(closings);
 
       const lastClosing: any = closings[0]; // because it's sorted desc
-      const lastClosingTime = lastClosing?.closingDate?.toMillis() || 0;
+      const lastClosingTime = lastClosing?.closingDate && typeof lastClosing.closingDate.toMillis === 'function' ? lastClosing.closingDate.toMillis() : (lastClosing?.closingDate ? Date.now() : 0);
 
       // Load invoices and notes for current user
       const qInvoices = query(collection(db, "invoices"), where("createdBy", "==", userName));
       const snapInvoices = await getDocs(qInvoices);
-      const newInvoices = snapInvoices.docs.map(d => d.data()).filter((d: any) => d.createdAt && d.createdAt.toMillis() > lastClosingTime && d.status === "Autorizado");
+      const newInvoices = snapInvoices.docs.map(d => ({ id: d.id, ...d.data() })).filter((d: any) => d.createdAt && d.createdAt.toMillis() > lastClosingTime && d.status === "Autorizado");
 
       const qNotes = query(collection(db, "salesNotes"), where("createdBy", "==", userName));
       const snapNotes = await getDocs(qNotes);
-      const newNotes = snapNotes.docs.map(d => d.data()).filter((d: any) => d.createdAt && d.createdAt.toMillis() > lastClosingTime && d.status !== "Anulado");
+      const newNotes = snapNotes.docs.map(d => ({ id: d.id, ...d.data() })).filter((d: any) => d.createdAt && d.createdAt.toMillis() > lastClosingTime && d.status !== "Anulado");
+
+      const qPayments = query(collection(db, "payments"), where("sellerName", "==", userName));
+      const snapPayments = await getDocs(qPayments);
+      const newPayments = snapPayments.docs.map(d => ({ id: d.id, ...d.data() })).filter((d: any) => d.createdAt && d.createdAt.toMillis() > lastClosingTime);
 
       let cash = 0; let transfers = 0; let cards = 0; let totalAmount = 0;
       let documents: any[] = [];
@@ -115,6 +119,28 @@ export default function CashRegisterPage() {
       processDocs(newInvoices, "Factura", "invoiceNumber");
       processDocs(newNotes, "Nota de Venta", "noteNumber");
 
+      const newInvoiceIds = new Set(newInvoices.map(d => d.id));
+      const newNoteIds = new Set(newNotes.map(d => d.id));
+      
+      const oldDocPayments = newPayments.filter(p => !newInvoiceIds.has(p.docId) && !newNoteIds.has(p.docId));
+      
+      oldDocPayments.forEach(p => {
+        const method = p.paymentMethod || "01";
+        const amount = p.amount || 0;
+        totalAmount += amount;
+        if (method === "01") cash += amount;
+        else if (method === "16" || method === "18" || method === "19") cards += amount;
+        else if (method === "20") transfers += amount;
+        else cash += amount;
+        
+        documents.push({
+          type: `Abono ${p.type}`,
+          num: p.docNumber || "S/N",
+          amount: amount,
+          client: p.clientName || "Cliente"
+        });
+      });
+
       setShiftStats({
         totalAmount,
         cash,
@@ -131,8 +157,8 @@ export default function CashRegisterPage() {
         const q = query(collection(db, "cashClosings"));
         const snap = await getDocs(q);
         const docs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => {
-          const tA = a.closingDate?.toMillis() || 0;
-          const tB = b.closingDate?.toMillis() || 0;
+          const tA = a.closingDate && typeof a.closingDate.toMillis === 'function' ? a.closingDate.toMillis() : (a.closingDate ? Date.now() : 0);
+          const tB = b.closingDate && typeof b.closingDate.toMillis === 'function' ? b.closingDate.toMillis() : (b.closingDate ? Date.now() : 0);
           return tB - tA;
         });
         setAllClosings(docs);
@@ -201,7 +227,7 @@ export default function CashRegisterPage() {
               <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
                 <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10">
                   <div className="flex items-center gap-2 text-white/80 mb-2">
-                    <Banknote className="h-4 w-4" /> <span className="text-xs font-bold uppercase tracking-wider">Efectivo</span>
+                    <Banknote className="h-4 w-4" /> <span className="text-xs font-bold uppercase tracking-wider">Monto</span>
                   </div>
                   <div className="text-2xl font-black">${shiftStats.cash.toFixed(2)}</div>
                 </div>
@@ -249,7 +275,6 @@ export default function CashRegisterPage() {
                 <TableHeader>
                   <TableRow className="bg-muted/30">
                     <TableHead className="font-bold">Fecha de Cierre</TableHead>
-                    <TableHead className="text-right font-bold">Efectivo</TableHead>
                     <TableHead className="text-right font-bold">Transferencias</TableHead>
                     <TableHead className="text-right font-bold">Tarjetas</TableHead>
                     <TableHead className="text-center font-bold">Docs.</TableHead>
@@ -260,9 +285,8 @@ export default function CashRegisterPage() {
                   {myClosings.map((c) => (
                     <TableRow key={c.id}>
                       <TableCell className="font-medium text-slate-700">
-                        {c.closingDate ? format(c.closingDate.toDate(), "dd MMM yyyy, HH:mm", { locale: es }) : 'N/A'}
+                        {c.closingDate && typeof c.closingDate.toDate === 'function' ? format(c.closingDate.toDate(), "dd MMM yyyy, HH:mm", { locale: es }) : 'Reciente'}
                       </TableCell>
-                      <TableCell className="text-right text-slate-600">${c.cash?.toFixed(2)}</TableCell>
                       <TableCell className="text-right text-slate-600">${c.transfers?.toFixed(2)}</TableCell>
                       <TableCell className="text-right text-slate-600">${c.cards?.toFixed(2)}</TableCell>
                       <TableCell className="text-center">
@@ -279,7 +303,7 @@ export default function CashRegisterPage() {
                     </TableRow>
                   ))}
                   {myClosings.length === 0 && (
-                    <TableRow><TableCell colSpan={6} className="text-center h-24 text-muted-foreground italic">No tienes cierres de caja previos.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="text-center h-24 text-muted-foreground italic">No tienes cierres de caja previos.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -299,7 +323,6 @@ export default function CashRegisterPage() {
                   <TableRow className="bg-slate-50">
                     <TableHead className="font-bold py-4">Fecha</TableHead>
                     <TableHead className="font-bold py-4">Vendedor</TableHead>
-                    <TableHead className="text-right font-bold py-4">Efectivo</TableHead>
                     <TableHead className="text-right font-bold py-4">Transfer / Tarj</TableHead>
                     <TableHead className="text-center font-bold py-4">Docs.</TableHead>
                     <TableHead className="text-right font-bold py-4">Total Entregado</TableHead>
@@ -309,14 +332,13 @@ export default function CashRegisterPage() {
                   {allClosings.map((c) => (
                     <TableRow key={c.id} className="hover:bg-slate-50 transition-colors">
                       <TableCell className="font-medium text-slate-700">
-                        {c.closingDate ? format(c.closingDate.toDate(), "dd MMM yyyy, HH:mm", { locale: es }) : 'N/A'}
+                        {c.closingDate && typeof c.closingDate.toDate === 'function' ? format(c.closingDate.toDate(), "dd MMM yyyy, HH:mm", { locale: es }) : 'Reciente'}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
                           {c.sellerName}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right font-bold text-slate-700">${c.cash?.toFixed(2)}</TableCell>
                       <TableCell className="text-right text-slate-500 text-xs">
                         T: ${c.transfers?.toFixed(2)} <br/>
                         C: ${c.cards?.toFixed(2)}
@@ -336,7 +358,7 @@ export default function CashRegisterPage() {
                     </TableRow>
                   ))}
                   {allClosings.length === 0 && (
-                    <TableRow><TableCell colSpan={6} className="text-center h-32 text-muted-foreground italic">No hay registros de cierres en el sistema.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="text-center h-32 text-muted-foreground italic">No hay registros de cierres en el sistema.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>

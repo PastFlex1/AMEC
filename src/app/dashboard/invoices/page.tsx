@@ -65,7 +65,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, doc, deleteDoc, query, orderBy, updateDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, deleteDoc, query, orderBy, updateDoc, serverTimestamp, addDoc } from "firebase/firestore";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -82,6 +82,12 @@ export default function InvoicesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   useEffect(() => {
     setUserRole(localStorage.getItem('amec_user_role') || 'sales');
@@ -133,6 +139,14 @@ export default function InvoicesPage() {
              ruc.toLowerCase().includes(searchTerm.toLowerCase());
     });
   }, [invoices, searchTerm, userRole, userName]);
+
+  const paginatedData = useMemo(() => {
+    if (!filtered) return [];
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filtered.slice(startIndex, startIndex + itemsPerPage);
+  }, [filtered, currentPage]);
+
+  const totalPages = Math.ceil((filtered?.length || 0) / itemsPerPage);
 
   const stats = useMemo(() => {
     if (!filtered) return { total: 0, count: 0, authorized: 0 };
@@ -369,6 +383,18 @@ export default function InvoicesPage() {
         balance: newBalance,
         updatedAt: serverTimestamp()
       });
+
+      await addDoc(collection(db, "payments"), {
+        type: "Factura",
+        docId: invoiceForPayment.id,
+        docNumber: invoiceForPayment.invoiceNumber,
+        amount: paymentAmount,
+        sellerName: userName,
+        clientName: invoiceForPayment.clientData?.name || invoiceForPayment.customerName || "Consumidor Final",
+        paymentMethod: invoiceForPayment.clientData?.paymentMethod || "01",
+        createdAt: serverTimestamp()
+      });
+
       toast({ title: "Pago Registrado", description: "El saldo ha sido actualizado." });
       setPaymentModalOpen(false);
     } catch (error: any) {
@@ -468,8 +494,8 @@ export default function InvoicesPage() {
               <TableBody>
                 {loading ? (
                   <TableRow><TableCell colSpan={6} className="h-32 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-                ) : filtered.length > 0 ? (
-                  filtered.map((inv: any) => {
+                ) : paginatedData.length > 0 ? (
+                  paginatedData.map((inv: any) => {
                     const isAuthorized = inv.status === 'Autorizado';
                     const isAnnulled = inv.status === 'Anulada';
                     return (
@@ -595,6 +621,36 @@ export default function InvoicesPage() {
               </TableBody>
             </Table>
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-50 bg-slate-50/30">
+              <div className="text-xs text-slate-500 font-medium">
+                Mostrando {filtered.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} a {Math.min(currentPage * itemsPerPage, filtered.length)} de {filtered.length} facturas
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="font-bold rounded-lg"
+                >
+                  Anterior
+                </Button>
+                <div className="flex items-center px-2 text-xs font-bold text-slate-400">
+                  {currentPage} / {totalPages}
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="font-bold rounded-lg"
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

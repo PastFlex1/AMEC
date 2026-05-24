@@ -43,11 +43,11 @@ export function PendingCashClosingModal() {
           const closings = snapClosings.docs.map(d => d.data());
           // Sort manually in case orderBy requires an index
           closings.sort((a: any, b: any) => {
-            const tA = a.closingDate?.toMillis() || 0;
-            const tB = b.closingDate?.toMillis() || 0;
+            const tA = a.closingDate && typeof a.closingDate.toMillis === 'function' ? a.closingDate.toMillis() : (a.closingDate ? Date.now() : 0);
+            const tB = b.closingDate && typeof b.closingDate.toMillis === 'function' ? b.closingDate.toMillis() : (b.closingDate ? Date.now() : 0);
             return tB - tA;
           });
-          lastClosingTime = closings[0]?.closingDate?.toMillis() || 0;
+          lastClosingTime = closings[0]?.closingDate && typeof closings[0].closingDate.toMillis === 'function' ? closings[0].closingDate.toMillis() : (closings[0]?.closingDate ? Date.now() : 0);
         }
 
         // 2. Fetch invoices and notes after lastClosingTime

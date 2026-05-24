@@ -49,6 +49,12 @@ export default function ProductsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [stockFilter, setStockFilter] = useState("all");
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, stockFilter]);
 
   useEffect(() => {
     setUserRole(localStorage.getItem('amec_user_role'));
@@ -80,6 +86,14 @@ export default function ProductsPage() {
       })
       .sort((a: any, b: any) => (a.name || "").localeCompare(b.name || ""));
   }, [products, searchTerm, stockFilter]);
+
+  const paginatedData = useMemo(() => {
+    if (!filtered) return [];
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filtered.slice(startIndex, startIndex + itemsPerPage);
+  }, [filtered, currentPage]);
+
+  const totalPages = Math.ceil((filtered?.length || 0) / itemsPerPage);
 
   const handleOpenDialog = (product?: any) => {
     if (product) {
@@ -226,8 +240,8 @@ export default function ProductsPage() {
                   <TableRow>
                     <TableCell colSpan={4} className="h-32 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell>
                   </TableRow>
-                ) : filtered.length > 0 ? (
-                  filtered.map((product: any) => (
+                ) : paginatedData.length > 0 ? (
+                  paginatedData.map((product: any) => (
                     <TableRow 
                       key={product.id} 
                       className="hover:bg-muted/10 transition-colors group cursor-pointer"
@@ -302,6 +316,36 @@ export default function ProductsPage() {
               </TableBody>
             </Table>
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-50 bg-slate-50/30">
+              <div className="text-xs text-slate-500 font-medium">
+                Mostrando {filtered.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} a {Math.min(currentPage * itemsPerPage, filtered.length)} de {filtered.length} productos
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="font-bold rounded-lg"
+                >
+                  Anterior
+                </Button>
+                <div className="flex items-center px-2 text-xs font-bold text-slate-400">
+                  {currentPage} / {totalPages}
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="font-bold rounded-lg"
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

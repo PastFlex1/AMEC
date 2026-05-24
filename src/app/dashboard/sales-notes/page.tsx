@@ -62,7 +62,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, doc, deleteDoc, query, orderBy, updateDoc, serverTimestamp } from "firebase/firestore";
+import { collection, deleteDoc, doc, updateDoc, serverTimestamp, addDoc } from "firebase/firestore";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -83,6 +83,12 @@ export default function SalesNotesPage() {
   const [loadingPayment, setLoadingPayment] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   useEffect(() => {
     setUserRole(localStorage.getItem('amec_user_role') || 'sales');
@@ -125,6 +131,14 @@ export default function SalesNotesPage() {
              ruc.toLowerCase().includes(searchTerm.toLowerCase());
     });
   }, [notes, searchTerm, userRole, userName]);
+
+  const paginatedData = useMemo(() => {
+    if (!filteredNotes) return [];
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredNotes.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredNotes, currentPage]);
+
+  const totalPages = Math.ceil((filteredNotes?.length || 0) / itemsPerPage);
 
   const stats = useMemo(() => {
     if (!filteredNotes) return { total: 0, count: 0 };
@@ -217,6 +231,18 @@ export default function SalesNotesPage() {
         balance: newBalance,
         updatedAt: serverTimestamp()
       });
+
+      await addDoc(collection(db, "payments"), {
+        type: "Nota de Venta",
+        docId: noteForPayment.id,
+        docNumber: noteForPayment.noteNumber || noteForPayment.id.substring(0, 8),
+        amount: paymentAmount,
+        sellerName: userName,
+        clientName: noteForPayment.clientData?.name || noteForPayment.customerName || "Cliente",
+        paymentMethod: noteForPayment.clientData?.paymentMethod || "01",
+        createdAt: serverTimestamp()
+      });
+
       toast({ title: "Pago Registrado", description: "El saldo ha sido actualizado." });
       setPaymentModalOpen(false);
     } catch (error: any) {
@@ -324,8 +350,8 @@ export default function SalesNotesPage() {
               <TableBody>
                 {loading ? (
                   <TableRow><TableCell colSpan={6} className="h-32 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-                ) : filteredNotes.length > 0 ? (
-                  filteredNotes.map((note: any) => (
+                ) : paginatedData.length > 0 ? (
+                  paginatedData.map((note: any) => (
                     <TableRow 
                       key={note.id} 
                       className="hover:bg-muted/30 transition-colors group cursor-pointer"
@@ -427,6 +453,36 @@ export default function SalesNotesPage() {
               </TableBody>
             </Table>
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-50 bg-slate-50/30">
+              <div className="text-xs text-slate-500 font-medium">
+                Mostrando {filteredNotes.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} a {Math.min(currentPage * itemsPerPage, filteredNotes.length)} de {filteredNotes.length} notas
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="font-bold rounded-lg"
+                >
+                  Anterior
+                </Button>
+                <div className="flex items-center px-2 text-xs font-bold text-slate-400">
+                  {currentPage} / {totalPages}
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="font-bold rounded-lg"
+                >
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

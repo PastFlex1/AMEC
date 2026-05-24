@@ -31,7 +31,7 @@ export default function LoginPage() {
 
     try {
       if (role === 'admin') {
-        if (email === 'amec@administrador.com' && password === 'amec123') {
+        if (email === 'administrador@amecindustrias.com' && password === 'amec123') {
           localStorage.setItem('amec_user_role', 'admin');
           localStorage.setItem('amec_user_name', 'Administrador');
           router.push('/dashboard/admin');
@@ -42,8 +42,8 @@ export default function LoginPage() {
       } else {
         const salespeopleRef = collection(db, "salespeople");
         const q = query(
-          salespeopleRef, 
-          where("email", "==", email), 
+          salespeopleRef,
+          where("email", "==", email),
           where("password", "==", password),
           where("status", "==", "Activo")
         );
@@ -80,10 +80,10 @@ export default function LoginPage() {
       }
 
       const salespeopleRef = collection(db, "salespeople");
-      
+
       const q = query(salespeopleRef, where("email", "==", email));
       const querySnapshot = await getDocs(q);
-      
+
       if (!querySnapshot.empty) {
         throw new Error("Este correo ya está registrado.");
       }
@@ -97,12 +97,12 @@ export default function LoginPage() {
       };
 
       await addDoc(salespeopleRef, userData);
-      
-      toast({ 
-        title: "Cuenta creada", 
-        description: "Ya puedes iniciar sesión como vendedor con tus credenciales." 
+
+      toast({
+        title: "Cuenta creada",
+        description: "Ya puedes iniciar sesión como vendedor con tus credenciales."
       });
-      
+
       setName('');
     } catch (error: any) {
       toast({
@@ -121,12 +121,12 @@ export default function LoginPage() {
         <div className="text-center space-y-4">
           <div className="flex justify-center">
             <div className="relative h-40 w-40 drop-shadow-xl bg-white/50 rounded-3xl p-4">
-              <Image 
-                src="/Amec.png" 
-                alt="Logo AMEC" 
-                fill 
-                className="object-contain p-2" 
-                priority 
+              <Image
+                src="/Amec.png"
+                alt="Logo AMEC"
+                fill
+                className="object-contain p-2"
+                priority
               />
             </div>
           </div>
@@ -152,32 +152,32 @@ export default function LoginPage() {
                 <CardContent className="space-y-6 pt-6">
                   <div className="space-y-2">
                     <Label htmlFor="email">Correo electrónico</Label>
-                    <Input 
-                      id="email" 
-                      type="email" 
-                      placeholder="ejemplo@amec.com" 
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="ejemplo@amec.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="rounded-xl h-11 border-slate-200 focus:ring-primary/20"
-                      required 
+                      required
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="password">Contraseña</Label>
-                    <Input 
-                      id="password" 
-                      type="password" 
+                    <Input
+                      id="password"
+                      type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="rounded-xl h-11 border-slate-200 focus:ring-primary/20"
-                      required 
+                      required
                     />
                   </div>
 
                   <div className="space-y-3">
                     <Label className="text-xs font-bold uppercase text-muted-foreground">Seleccione su rol</Label>
-                    <RadioGroup 
-                      defaultValue="admin" 
+                    <RadioGroup
+                      defaultValue="admin"
                       onValueChange={(v) => setRole(v as any)}
                       className="grid grid-cols-2 gap-4"
                     >
@@ -224,36 +224,36 @@ export default function LoginPage() {
                 <CardContent className="space-y-4 pt-6">
                   <div className="space-y-2">
                     <Label htmlFor="reg-name">Nombre Completo</Label>
-                    <Input 
-                      id="reg-name" 
-                      placeholder="Ej: Roberto Sánchez" 
+                    <Input
+                      id="reg-name"
+                      placeholder="Ej: Roberto Sánchez"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       className="rounded-xl h-11 border-slate-200"
-                      required 
+                      required
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="reg-email">Correo Electrónico</Label>
-                    <Input 
-                      id="reg-email" 
-                      type="email" 
-                      placeholder="vendedor@amec.com" 
+                    <Input
+                      id="reg-email"
+                      type="email"
+                      placeholder="vendedor@amec.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="rounded-xl h-11 border-slate-200"
-                      required 
+                      required
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="reg-password">Contraseña de Acceso</Label>
-                    <Input 
-                      id="reg-password" 
-                      type="password" 
+                    <Input
+                      id="reg-password"
+                      type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="rounded-xl h-11 border-slate-200"
-                      required 
+                      required
                     />
                   </div>
                   <p className="text-[10px] text-muted-foreground italic px-1 bg-amber-50 p-2 rounded-lg border border-amber-100">
