@@ -62,7 +62,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, deleteDoc, doc, updateDoc, serverTimestamp, addDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, updateDoc, serverTimestamp, addDoc, query, orderBy } from "firebase/firestore";
+import { syncDailyCashClosing } from "@/lib/cash-register-service";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -200,9 +201,16 @@ export default function SalesNotesPage() {
 
   const handleDelete = () => {
     if (!db || !noteToDelete) return;
+    const note = notes?.find((n: any) => n.id === noteToDelete);
     deleteDoc(doc(db, "salesNotes", noteToDelete))
-      .then(() => {
+      .then(async () => {
         toast({ title: "Nota eliminada", description: "El registro interno ha sido removido definitivamente." });
+        
+        const noteDate = note?.date ? (note.date.toDate ? note.date.toDate() : new Date(note.date)) : new Date();
+        const dateString = format(noteDate, "yyyy-MM-dd");
+        const sellerName = note?.createdBy || userName;
+        await syncDailyCashClosing(db, sellerName, dateString);
+
         setNoteToDelete(null);
       })
       .catch(async () => {
@@ -244,6 +252,10 @@ export default function SalesNotesPage() {
       });
 
       toast({ title: "Pago Registrado", description: "El saldo ha sido actualizado." });
+      
+      const dateString = format(new Date(), "yyyy-MM-dd");
+      await syncDailyCashClosing(db, userName, dateString);
+
       setPaymentModalOpen(false);
     } catch (error: any) {
       toast({ title: "Error al registrar pago", description: error.message, variant: "destructive" });

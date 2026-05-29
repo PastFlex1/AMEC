@@ -66,6 +66,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useFirestore, useCollection } from "@/firebase";
 import { collection, doc, deleteDoc, query, orderBy, updateDoc, serverTimestamp, addDoc } from "firebase/firestore";
+import { syncDailyCashClosing } from "@/lib/cash-register-service";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -351,6 +352,12 @@ export default function InvoicesPage() {
         title: "Factura Anulada Legalmente", 
         description: "Se ha procesado y autorizado la Nota de Crédito con el SRI." 
       });
+      
+      const invoiceDate = invoiceToAnnul.date ? (invoiceToAnnul.date.toDate ? invoiceToAnnul.date.toDate() : new Date(invoiceToAnnul.date)) : new Date();
+      const dateString = format(invoiceDate, "yyyy-MM-dd");
+      const sellerName = invoiceToAnnul.createdBy || userName;
+      await syncDailyCashClosing(db, sellerName, dateString);
+
       setInvoiceToAnnul(null);
     } catch (error: any) {
       toast({ 
@@ -396,6 +403,10 @@ export default function InvoicesPage() {
       });
 
       toast({ title: "Pago Registrado", description: "El saldo ha sido actualizado." });
+      
+      const dateString = format(new Date(), "yyyy-MM-dd");
+      await syncDailyCashClosing(db, userName, dateString);
+
       setPaymentModalOpen(false);
     } catch (error: any) {
       toast({ title: "Error al registrar pago", description: error.message, variant: "destructive" });

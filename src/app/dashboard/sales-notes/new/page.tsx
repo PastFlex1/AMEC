@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useFirestore, useCollection } from "@/firebase";
 import { collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot, updateDoc, doc, where, getDocs, increment } from "firebase/firestore";
+import { syncDailyCashClosing } from "@/lib/cash-register-service";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { generateBillingPDF, getBillingPDFBase64 } from "@/lib/pdf-service";
@@ -242,6 +243,10 @@ export default function NewSalesNotePage() {
         if (batchUpdates.length > 0) await Promise.all(batchUpdates);
       }
       
+      const dateString = format(date, "yyyy-MM-dd");
+      const sellerName = localStorage.getItem('amec_user_name') || 'Vendedor';
+      await syncDailyCashClosing(db, sellerName, dateString);
+
       toast({ title: "Nota guardada" });
       if (!customStatus) router.push('/dashboard/sales-notes');
       return currentId;

@@ -58,6 +58,7 @@ import { generateBillingPDF, getBillingPDFBase64 } from "@/lib/pdf-service";
 import { sendBillingEmail } from "@/app/actions/email-actions";
 import { emitirFacturaAction } from "@/app/actions/sri-actions";
 import { generateInvoiceXML, downloadXML, generateAccessKey } from "@/lib/sri-xml-service";
+import { syncDailyCashClosing } from "@/lib/cash-register-service";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -260,6 +261,10 @@ export default function NewInvoicePage() {
         if (batchUpdates.length > 0) await Promise.all(batchUpdates);
       }
       
+      const dateString = format(date, "yyyy-MM-dd");
+      const sellerName = localStorage.getItem('amec_user_name') || 'Admin';
+      await syncDailyCashClosing(db, sellerName, dateString);
+
       if (!isSilent) {
         toast({ title: "Factura guardada correctamente" });
         router.push('/dashboard/invoices');
@@ -310,7 +315,7 @@ export default function NewInvoicePage() {
       
       setSriStatus({ firma: true, recepcion: true, autorizacion: true });
       setAuthDate(formattedAuthDate);
-      setAuthorizedXml(res.autorizacion);
+      setAuthorizedXml(res.autorizacion || null);
       setCurrentStatus("Autorizado");
 
       await handleSave("Autorizado", formattedAuthDate, res.autorizacion, "");
