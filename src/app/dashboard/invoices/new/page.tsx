@@ -51,7 +51,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot, updateDoc, doc, where, getDocs, increment } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot, updateDoc, doc, where, getDocs, increment, getDoc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { generateBillingPDF, getBillingPDFBase64 } from "@/lib/pdf-service";
@@ -129,6 +129,45 @@ export default function NewInvoicePage() {
       }
     });
     return () => unsubscribe();
+  }, [db]);
+
+  useEffect(() => {
+    if (!db) return;
+    const searchParams = new URLSearchParams(window.location.search);
+    const proformaId = searchParams.get('proformaId');
+    if (proformaId) {
+      getDoc(doc(db, "proformas", proformaId)).then((snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.clientData) {
+            setClientData({
+              ruc: data.clientData.ruc || "",
+              name: data.clientData.name || "",
+              address: data.clientData.address || "",
+              email: data.clientData.email || "",
+              phone: data.clientData.phone || "",
+              paymentMethod: data.clientData.paymentMethod || "01",
+              transferNumber: data.clientData.transferNumber || ""
+            });
+          }
+          if (data.items && data.items.length > 0) {
+            setItems(data.items.map((item: any) => ({
+              id: Math.random().toString(36).substr(2, 9),
+              description: item.description || "",
+              quantity: item.quantity || 1,
+              unitPrice: item.unitPrice || 0,
+              productId: item.productId || null,
+              maxStock: item.maxStock !== undefined ? item.maxStock : null
+            })));
+          }
+          if (data.observations) {
+            setObservations(data.observations);
+          }
+        }
+      }).catch(err => {
+        console.error("Error fetching proforma:", err);
+      });
+    }
   }, [db]);
 
   const totalWithIVA = items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);

@@ -397,6 +397,11 @@ export default function ProformasPage() {
                             >
                               <Eye className="mr-3 h-4 w-4 text-indigo-600" /> Ver Detalles
                             </DropdownMenuItem>
+                            <DropdownMenuItem asChild className="rounded-xl cursor-pointer py-3 hover:bg-indigo-50 focus:bg-indigo-50">
+                              <Link href={`/dashboard/invoices/new?proformaId=${prof.id}`}>
+                                <FileText className="mr-3 h-4 w-4 text-indigo-600" /> Convertir a Factura
+                              </Link>
+                            </DropdownMenuItem>
                             <DropdownMenuItem 
                               className="rounded-xl cursor-pointer py-3 hover:bg-indigo-50 focus:bg-indigo-50"
                               onSelect={(e) => { e.preventDefault(); handleDownloadPDF(prof); }}

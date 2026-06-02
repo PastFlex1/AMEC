@@ -16,7 +16,8 @@ import {
   XCircle,
   ChevronDown,
   Wallet,
-  ArrowDownToLine
+  ArrowDownToLine,
+  TrendingUp
 } from "lucide-react";
 import {
   SidebarGroup,
@@ -58,6 +59,7 @@ export function SidebarNav({ role, searchQuery = "" }: SidebarNavProps) {
         { title: "Inicio", href: "/dashboard/admin", icon: Home },
         { title: "Reportes", href: "/dashboard/reports", icon: BarChart3 },
         { title: "Cierre de Caja", href: "/dashboard/cash-register", icon: Wallet },
+        { title: "Inversiones", href: "/dashboard/investments", icon: TrendingUp },
         { title: "Vendedores", href: "/dashboard/salespeople", icon: Users },
       ]
     },
