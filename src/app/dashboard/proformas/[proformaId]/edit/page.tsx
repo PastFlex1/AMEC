@@ -380,8 +380,8 @@ export default function EditProformaPage() {
                   </SelectContent>
                 </Select>
                 {clientData.paymentMethod === "20" && (
-                  <div className="pt-2 animate-in slide-in-from-top-2 duration-300">
-                    <Label className="font-bold text-primary uppercase text-[10px]">No. Transferencia / Referencia:</Label>
+                  <div className="space-y-2 md:col-span-2 animate-in slide-in-from-top-2 duration-300">
+                    <Label className="font-bold text-[10px] uppercase text-indigo-600 tracking-widest">No. Transferencia / Comprobante</Label>
                     <Input 
                       placeholder="Referencia bancaria" 
                       value={clientData.transferNumber} 

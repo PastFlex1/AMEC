@@ -375,6 +375,17 @@ export default function NewProformaPage() {
                 <SelectContent>{PAYMENT_METHODS.map((m) => (<SelectItem key={m.code} value={m.code}>{m.code} - {m.label}</SelectItem>))}</SelectContent>
               </Select>
             </div>
+            {clientData.paymentMethod === "20" && (
+              <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+                <Label className="font-bold text-indigo-600 uppercase text-[10px] tracking-widest">No. Transferencia / Comprobante:</Label>
+                <Input 
+                  placeholder="Referencia bancaria" 
+                  value={clientData.transferNumber} 
+                  onChange={(e) => setClientData({...clientData, transferNumber: e.target.value})} 
+                  className="bg-indigo-50/50 border-indigo-100 text-indigo-600 h-11 font-bold mt-1" 
+                />
+              </div>
+            )}
           </div>
         </Card>
       </div>

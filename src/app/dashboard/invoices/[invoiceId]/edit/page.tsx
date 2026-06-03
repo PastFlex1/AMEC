@@ -561,6 +561,16 @@ export default function EditInvoicePage() {
                       <div className="h-11 px-3 bg-slate-50 border border-slate-100 rounded-md flex items-center text-sm font-bold text-slate-700">{PAYMENT_METHODS.find(m => m.code === clientData.paymentMethod)?.label || "EFECTIVO"}</div>
                     )}
                   </div>
+                  {clientData.paymentMethod === "20" && (
+                    <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+                      <Label className="font-bold text-primary uppercase text-[10px]">No. Transferencia / Comprobante</Label>
+                      {!isReadOnly ? (
+                        <Input placeholder="Referencia bancaria" value={clientData.transferNumber} onChange={(e) => setClientData({...clientData, transferNumber: e.target.value})} className="bg-primary/5 border-primary/20 h-11 font-bold" />
+                      ) : (
+                        <div className="h-11 px-3 bg-slate-50 border border-slate-100 rounded-md flex items-center text-sm font-bold text-slate-700">{clientData.transferNumber || "N/A"}</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

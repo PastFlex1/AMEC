@@ -22,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -69,6 +70,16 @@ import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 import { generateBillingPDF } from "@/lib/pdf-service";
 
+const PAYMENT_METHODS = [
+  { code: "01", label: "SIN UTILIZACIÓN DEL SISTEMA FINANCIERO" },
+  { code: "15", label: "COMPENSACIÓN DE DEUDAS" },
+  { code: "16", label: "TARJETA DE DÉBITO" },
+  { code: "17", label: "DINERO ELECTRÓNICO" },
+  { code: "18", label: "TARJETA PREPAGO" },
+  { code: "19", label: "TARJETA DE CRÉDITO" },
+  { code: "20", label: "OTROS CON UTILIZACIÓN DEL SISTEMA FINANCIERO" },
+];
+
 export default function ProformasPage() {
   const { toast } = useToast();
   const db = useFirestore();
@@ -94,6 +105,8 @@ export default function ProformasPage() {
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [proformaForPayment, setProformaForPayment] = useState<any>(null);
   const [loadingPayment, setLoadingPayment] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("01");
+  const [paymentTransferNumber, setPaymentTransferNumber] = useState("");
 
   const proformasRef = useMemo(() => {
     if (!db) return null;
@@ -208,6 +221,8 @@ export default function ProformasPage() {
   const openPaymentModal = (prof: any) => {
     setProformaForPayment(prof);
     setPaymentAmount(prof.balance !== undefined ? prof.balance : 0);
+    setSelectedPaymentMethod(prof.clientData?.paymentMethod || "01");
+    setPaymentTransferNumber(prof.clientData?.transferNumber || "");
     setPaymentModalOpen(true);
   };
 
@@ -233,7 +248,8 @@ export default function ProformasPage() {
         amount: paymentAmount,
         sellerName: userName,
         clientName: proformaForPayment.clientData?.name || proformaForPayment.customerName || "Cliente",
-        paymentMethod: proformaForPayment.clientData?.paymentMethod || "01",
+        paymentMethod: selectedPaymentMethod,
+        transferNumber: paymentTransferNumber,
         createdAt: serverTimestamp()
       });
 
@@ -637,6 +653,31 @@ export default function ProformasPage() {
                 />
               </div>
             </div>
+            
+            <div className="space-y-2 pt-2">
+              <Label className="text-xs font-black uppercase text-indigo-600 tracking-widest">Forma de Pago</Label>
+              <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
+                <SelectTrigger className="h-14 font-bold bg-slate-50 border-slate-200 rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((m) => (
+                    <SelectItem key={m.code} value={m.code}>{m.code} - {m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {selectedPaymentMethod === "20" && (
+              <div className="space-y-2 pt-2 animate-in slide-in-from-top-2 duration-300">
+                <Label className="text-xs font-black uppercase text-indigo-600 tracking-widest">No. Transferencia / Comprobante</Label>
+                <Input 
+                  placeholder="Referencia bancaria" 
+                  value={paymentTransferNumber} 
+                  onChange={(e) => setPaymentTransferNumber(e.target.value)}
+                  className="pl-4 h-14 font-black bg-indigo-50/50 border-indigo-100 text-indigo-600 rounded-xl"
+                />
+              </div>
+            )}
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setPaymentModalOpen(false)} disabled={loadingPayment} className="rounded-xl h-12 font-bold border-slate-200">Cancelar</Button>
