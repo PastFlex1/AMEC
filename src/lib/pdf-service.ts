@@ -155,7 +155,7 @@ function createPDFDoc(data: PDFData) {
     doc.text(`Dirección:`, 12, 132);
     doc.text(data.client.address || 'S/N', 65, 132, { maxWidth: 130 });
     const tableRows = data.items.map((item) => {
-      const pUnit = safe(item.unitPrice) / 1.15;
+      const pUnit = safe(item.unitPrice);
       const pTotal = safe(item.quantity) * pUnit;
       return [
         '0101', '0101', safe(item.quantity).toFixed(2),

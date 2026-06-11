@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { 
   ArrowLeft, Save, Plus, Trash2, Loader2, Calendar as CalendarIcon, 
   Mail, FileDown, Hash, UserCheck, Phone, Search, MapPin, Info,
-  AlertTriangle, FileWarning
+  AlertTriangle, FileWarning, DollarSign
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,6 +71,7 @@ export default function EditProformaPage() {
   const [productSearch, setProductSearch] = useState("");
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
   const [proformaNumber, setProformaNumber] = useState("");
+  const [deposit, setDeposit] = useState<number>(0);
   
   const [clientData, setClientData] = useState({
     ruc: "",
@@ -101,6 +102,7 @@ export default function EditProformaPage() {
       });
       setItems(existingProforma.items || []);
       setObservations(existingProforma.observations || "");
+      setDeposit(existingProforma.deposit || 0);
       if (existingProforma.date) setDate(new Date(existingProforma.date));
       if ((cd.ruc || existingProforma.ruc) === "9999999999999") setIsConsumidorFinal(true);
     }
@@ -109,6 +111,7 @@ export default function EditProformaPage() {
   const totalWithIVA = items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
   const subtotalBase = totalWithIVA;
   const ivaCalculated = 0;
+  const balance = Math.max(0, totalWithIVA - deposit);
 
   const docInfo = useMemo(() => {
     if (isConsumidorFinal) return { text: "Consumidor Final activo", isError: false };
@@ -174,6 +177,8 @@ export default function EditProformaPage() {
         clientData: { ...clientData },
         items: items.filter(i => i.description.trim() !== ""),
         total: totalWithIVA,
+        deposit,
+        balance,
         observations,
         status: customStatus || existingProforma?.status || "Pendiente",
         date: date.toISOString(),
@@ -197,6 +202,8 @@ export default function EditProformaPage() {
         subtotal: subtotalBase,
         iva: ivaCalculated,
         total: totalWithIVA,
+        deposit,
+        balance,
         date: format(date, "dd/MM/yyyy"),
         docNumber: proformaNumber,
         observations,
@@ -218,6 +225,8 @@ export default function EditProformaPage() {
         subtotal: subtotalBase,
         iva: ivaCalculated,
         total: totalWithIVA,
+        deposit,
+        balance,
         date: format(date, "dd/MM/yyyy"),
         docNumber: proformaNumber,
         observations,
@@ -456,10 +465,31 @@ export default function EditProformaPage() {
       </div>
 
       <div className="flex justify-end mt-8">
-        <Card className="bg-indigo-600 text-white rounded-3xl p-8 w-full md:w-96 shadow-xl">
-          <div className="flex justify-between text-sm opacity-90"><span>Subtotal (IVA 0%):</span><span className="font-mono">${subtotalBase.toFixed(2)}</span></div>
-          <div className="flex justify-between text-sm opacity-90"><span>IVA 0%:</span><span className="font-mono">$0.00</span></div>
-          <div className="pt-4 border-t border-white/20"><div className="flex justify-between items-end"><span className="text-xs uppercase font-black">Total a Pagar</span><span className="text-4xl font-black font-mono">${totalWithIVA.toFixed(2)}</span></div></div>
+        <Card className="bg-indigo-600 text-white rounded-3xl p-8 w-full md:w-96 shadow-xl space-y-6">
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm opacity-90"><span>Subtotal (IVA 0%):</span><span className="font-mono">${subtotalBase.toFixed(2)}</span></div>
+            <div className="flex justify-between text-sm opacity-90"><span>IVA 0%:</span><span className="font-mono">$0.00</span></div>
+            <div className="pt-4 border-t border-white/20"><div className="flex justify-between items-end"><span className="text-xs uppercase font-black">Total a Pagar</span><span className="text-4xl font-black font-mono">${totalWithIVA.toFixed(2)}</span></div></div>
+          </div>
+          
+          <div className="space-y-4 pt-6 border-t border-white/10">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-indigo-100">Abono Inicial:</Label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-300" />
+                <Input 
+                  type="number" 
+                  value={deposit} 
+                  onChange={(e) => { setDeposit(Math.max(0, parseFloat(e.target.value) || 0)); setIsDirty(true); }}
+                  className="pl-10 h-12 bg-white/10 border-white/20 text-white font-bold text-lg rounded-xl focus:bg-white/20 transition-colors"
+                />
+              </div>
+            </div>
+            <div className="p-4 bg-white/10 rounded-2xl border border-white/10 flex justify-between items-center">
+              <span className="text-xs font-black uppercase text-indigo-100">Saldo Pendiente:</span>
+              <span className="text-2xl font-black text-white font-mono">${balance.toFixed(2)}</span>
+            </div>
+          </div>
         </Card>
       </div>
 
