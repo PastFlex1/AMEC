@@ -311,14 +311,19 @@ export default function EditInvoicePage() {
           razonSocial: clientData.name,
           identificacion: clientData.ruc,
           direccion: clientData.address,
-          email: clientData.email
+          email: clientData.email,
+          telefono: clientData.phone
         },
         items: items.filter(i => i.description.trim() !== "").map(i => ({
           descripcion: i.description,
           cantidad: i.quantity,
           precioUnitario: i.unitPrice
         })),
-        formaPago: clientData.paymentMethod
+        formaPago: clientData.paymentMethod,
+        observaciones: observations,
+        transferNumber: clientData.transferNumber,
+        deposit: deposit,
+        balance: balance
       });
 
       const res = await emitirFacturaAction(xmlBase);

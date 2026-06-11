@@ -18,6 +18,7 @@ export interface SRIInvoiceData {
     identificacion: string;
     direccion?: string;
     email?: string;
+    telefono?: string;
   };
   items: Array<{
     codigo?: string;
@@ -32,6 +33,10 @@ export interface SRIInvoiceData {
     numero: string;
     fecha: string;
   };
+  observaciones?: string;
+  transferNumber?: string;
+  deposit?: number;
+  balance?: number;
 }
 
 /**
@@ -188,11 +193,23 @@ export function generateInvoiceXML(data: SRIInvoiceData): string {
   });
   xml += `    </detalles>\n\n`;
 
-  xml += `    <infoAdicional>\n`;
-  if (data.cliente.email) {
-    xml += `        <campoAdicional nombre="email">${data.cliente.email}</campoAdicional>\n`;
+  const additionalFields = [];
+  if (data.cliente.email) additionalFields.push({ name: "email", value: data.cliente.email });
+  if (data.cliente.telefono) additionalFields.push({ name: "telefono", value: data.cliente.telefono });
+  if (data.observaciones) additionalFields.push({ name: "observaciones", value: data.observaciones });
+  if (data.transferNumber) additionalFields.push({ name: "comprobante", value: data.transferNumber });
+  if (data.deposit !== undefined && data.deposit > 0) {
+    additionalFields.push({ name: "abono", value: safe(data.deposit).toFixed(2) });
+    additionalFields.push({ name: "saldo", value: safe(data.balance).toFixed(2) });
   }
-  xml += `    </infoAdicional>\n\n`;
+
+  if (additionalFields.length > 0) {
+    xml += `    <infoAdicional>\n`;
+    additionalFields.forEach(field => {
+      xml += `        <campoAdicional nombre="${field.name}">${field.value}</campoAdicional>\n`;
+    });
+    xml += `    </infoAdicional>\n\n`;
+  }
 
   xml += `</factura>`;
   return xml;

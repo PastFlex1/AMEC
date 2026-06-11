@@ -172,24 +172,25 @@ function createPDFDoc(data: PDFData) {
     });
     const finalY = (doc as any).lastAutoTable.finalY + 5;
     doc.setLineWidth(0.3);
-    doc.roundedRect(10, finalY, 110, 45, 2, 2, 'S');
+    doc.roundedRect(10, finalY, 110, 58, 2, 2, 'S');
     doc.setFontSize(8); doc.setFont('helvetica', 'bold');
     doc.text('Información Adicional', 15, finalY + 6);
     doc.setFont('helvetica', 'normal');
     doc.text(`Email Cliente: ${data.client.email || 'N/A'}`, 15, finalY + 12);
-    doc.text(`Dirección: ${data.client.address || 'S/N'}`, 15, finalY + 18, { maxWidth: 100 });
+    doc.text(`Teléfono: ${data.client.phone || 'N/A'}`, 15, finalY + 18);
+    doc.text(`Dirección: ${data.client.address || 'S/N'}`, 15, finalY + 24, { maxWidth: 100 });
     const methodDesc = PAYMENT_MAP[data.client.paymentMethod || "01"] || "SIN UTILIZACIÓN DEL SISTEMA FINANCIERO";
-    doc.text(`Forma de Pago:`, 15, finalY + 24);
+    doc.text(`Forma de Pago:`, 15, finalY + 30);
     doc.setFont('helvetica', 'bold');
-    doc.text(methodDesc + (data.client.transferNumber ? ` - REF: ${data.client.transferNumber}` : ""), 40, finalY + 24, { maxWidth: 75 });
+    doc.text(methodDesc + (data.client.transferNumber ? ` - REF: ${data.client.transferNumber}` : ""), 40, finalY + 30, { maxWidth: 75 });
     doc.setFont('helvetica', 'normal');
-    if (data.observations) { doc.text(`Notas: ${data.observations}`, 15, finalY + 34, { maxWidth: 100 }); }
+    if (data.observations) { doc.text(`Notas: ${data.observations}`, 15, finalY + 40, { maxWidth: 100 }); }
     
     // Summary of internal payments (Optional info for customer)
     if (safe(data.deposit) > 0) {
       doc.setFontSize(7);
-      doc.text(`Monto Abonado / Adelantado: $${safe(data.deposit).toFixed(2)}`, 15, finalY + 40);
-      doc.text(`Saldo Pendiente: $${safe(data.balance).toFixed(2)}`, 15, finalY + 43);
+      doc.text(`Monto Abonado / Adelantado: $${safe(data.deposit).toFixed(2)}`, 15, finalY + 48);
+      doc.text(`Saldo Pendiente: $${safe(data.balance).toFixed(2)}`, 15, finalY + 52);
     }
 
     const totalX = 125; const valueX = 195; const rowHeight = 5; let currentY = finalY;
