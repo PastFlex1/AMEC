@@ -17,7 +17,8 @@ import {
   ChevronDown,
   Wallet,
   ArrowDownToLine,
-  TrendingUp
+  TrendingUp,
+  Settings
 } from "lucide-react";
 import {
   SidebarGroup,
@@ -88,6 +89,7 @@ export function SidebarNav({ role, searchQuery = "" }: SidebarNavProps) {
       items: [
         { title: "Autorizadas", href: "/dashboard/sri/authorized", icon: CheckCircle2 },
         { title: "Rechazadas", href: "/dashboard/sri/rejected", icon: XCircle },
+        { title: "Configuración SRI", href: "/dashboard/sri/config", icon: Settings },
       ]
     }
   ];

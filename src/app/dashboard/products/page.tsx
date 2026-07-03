@@ -45,7 +45,7 @@ export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
-  const [newProduct, setNewProduct] = useState({ name: "", price: "", stock: "0" });
+  const [newProduct, setNewProduct] = useState({ name: "", price: "", stock: "0", ivaRate: "15" });
   const [isSaving, setIsSaving] = useState(false);
   const [stockFilter, setStockFilter] = useState("all");
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -66,7 +66,7 @@ export default function ProductsPage() {
   useEffect(() => {
     if (!isDialogOpen) {
       setEditingProduct(null);
-      setNewProduct({ name: "", price: "", stock: "0" });
+      setNewProduct({ name: "", price: "", stock: "0", ivaRate: "15" });
       setIsSaving(false);
     }
   }, [isDialogOpen]);
@@ -101,11 +101,12 @@ export default function ProductsPage() {
       setNewProduct({ 
         name: product.name || "", 
         price: product.price ? product.price.toString() : "",
-        stock: product.stock !== undefined ? product.stock.toString() : "0"
+        stock: product.stock !== undefined ? product.stock.toString() : "0",
+        ivaRate: product.ivaRate !== undefined ? product.ivaRate.toString() : "15"
       });
     } else {
       setEditingProduct(null);
-      setNewProduct({ name: "", price: "", stock: "0" });
+      setNewProduct({ name: "", price: "", stock: "0", ivaRate: "15" });
     }
     setIsDialogOpen(true);
   };
@@ -127,7 +128,8 @@ export default function ProductsPage() {
     const productData = {
       name: newProduct.name,
       price: parseFloat(newProduct.price),
-      stock: parseInt(newProduct.stock) || 0
+      stock: parseInt(newProduct.stock) || 0,
+      ivaRate: newProduct.ivaRate
     };
 
     if (editingProduct) {
@@ -185,7 +187,7 @@ export default function ProductsPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-gray-900">Catálogo de Productos</h1>
-          <p className="text-muted-foreground">Gestión de nombres y precios (IVA 0%).</p>
+          <p className="text-muted-foreground font-medium">Gestión de nombres, precios y tarifas de IVA del catálogo.</p>
         </div>
 
         <Button 
@@ -231,6 +233,7 @@ export default function ProductsPage() {
                   <TableHead className="w-[80px] text-center font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Icono</TableHead>
                   <TableHead className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Producto / Servicio</TableHead>
                   <TableHead className="text-center font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Stock</TableHead>
+                  <TableHead className="text-center font-bold uppercase text-[10px] tracking-widest text-muted-foreground">IVA</TableHead>
                   <TableHead className="text-right font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Precio</TableHead>
                   <TableHead className="w-[80px]"></TableHead>
                 </TableRow>
@@ -264,6 +267,18 @@ export default function ProductsPage() {
                         ) : (
                           <span className="text-muted-foreground italic text-xs">N/A</span>
                         )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className={cn(
+                          "inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded",
+                          product.ivaRate === "15" ? "bg-indigo-100 text-indigo-700 font-extrabold" :
+                          product.ivaRate === "0" ? "bg-slate-100 text-slate-600" :
+                          "bg-amber-100 text-amber-700"
+                        )}>
+                          {product.ivaRate === "No objeto" ? "No Objeto" :
+                           product.ivaRate === "Exento" ? "Exento" :
+                           product.ivaRate !== undefined ? `${product.ivaRate}%` : "15%"}
+                        </span>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="inline-flex items-center font-black text-primary text-lg">
@@ -373,7 +388,7 @@ export default function ProductsPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="price" className="text-xs font-bold uppercase text-muted-foreground">Precio Final (IVA 0%)</Label>
+                <Label htmlFor="price" className="text-xs font-bold uppercase text-muted-foreground">Precio Base (Sin IVA)</Label>
                 <div className="relative">
                   <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
@@ -403,6 +418,23 @@ export default function ProductsPage() {
                   />
                 </div>
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ivaRate" className="text-xs font-bold uppercase text-slate-500">Tarifa de IVA</Label>
+              <Select 
+                value={newProduct.ivaRate} 
+                onValueChange={(val) => setNewProduct({ ...newProduct, ivaRate: val })}
+              >
+                <SelectTrigger className="h-12 rounded-xl border bg-white border-slate-200">
+                  <SelectValue placeholder="Seleccione Tarifa IVA" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="15">Tarifa 15%</SelectItem>
+                  <SelectItem value="0">Tarifa 0%</SelectItem>
+                  <SelectItem value="No objeto">No objeto de IVA</SelectItem>
+                  <SelectItem value="Exento">Exento de IVA</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <DialogFooter>
               <Button type="submit" className="w-full h-12 rounded-xl bg-primary font-bold">

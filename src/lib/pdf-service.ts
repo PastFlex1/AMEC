@@ -17,6 +17,23 @@ interface PDFData {
   subtotal: number;
   iva: number;
   total: number;
+  subtotal15?: number;
+  subtotal0?: number;
+  subtotalNoObjeto?: number;
+  subtotalExento?: number;
+  iva15?: number;
+  regimen?: string;
+  obligadoContabilidad?: string;
+  emitter?: {
+    name: string;
+    ruc: string;
+    address: string;
+    phone?: string;
+    phones?: string;
+    email: string;
+    regimen?: string;
+    obligadoContabilidad?: string;
+  };
   deposit?: number;
   balance?: number;
   date: string;
@@ -77,6 +94,16 @@ function createPDFDoc(data: PDFData) {
   const displayNum = data.docNumber || "001-100-XXXXXXXXX";
   const isAutorizado = data.status?.trim().toLowerCase() === "autorizado";
 
+  const emitter = data.emitter || {
+    name: EMITTER_INFO.name,
+    ruc: EMITTER_INFO.ruc,
+    address: EMITTER_INFO.address,
+    phones: EMITTER_INFO.phones,
+    email: EMITTER_INFO.email,
+    regimen: data.regimen || "RIMPE - EMPRENDEDOR",
+    obligadoContabilidad: data.obligadoContabilidad || "NO"
+  };
+
   if (isFactura) {
     const authNumber = data.accessKey || "0000000000000000000000000000000000000000000000000";
     try { doc.addImage('/Amec.png', 'PNG', 15, 10, 35, 35); } catch (e) {}
@@ -86,24 +113,31 @@ function createPDFDoc(data: PDFData) {
     doc.roundedRect(10, 52, 90, 52, 3, 3, 'S');
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
-    doc.text(EMITTER_INFO.name, 15, 60);
+    doc.text(emitter.name, 15, 58);
     doc.setFontSize(11);
-    doc.text('AMEC', 15, 66);
+    doc.text('AMEC', 15, 63);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
-    doc.text('Dirección Matriz:', 15, 72);
-    doc.text(EMITTER_INFO.address, 15, 76, { maxWidth: 80 });
-    doc.text('Dirección Sucursal:', 15, 82);
-    doc.text(EMITTER_INFO.address, 15, 86, { maxWidth: 80 });
-    doc.text(`Telf: ${EMITTER_INFO.phones}`, 15, 92, { maxWidth: 80 });
-    doc.text(`Email: ${EMITTER_INFO.email}`, 15, 96);
+    doc.text('Dirección Matriz:', 15, 68);
+    doc.text(emitter.address, 15, 72, { maxWidth: 80 });
+    doc.text('Dirección Sucursal:', 15, 78);
+    doc.text(emitter.address, 15, 82, { maxWidth: 80 });
+    doc.text(`Telf: ${emitter.phones || emitter.phone || ""}`, 15, 88, { maxWidth: 80 });
+    doc.text(`Email: ${emitter.email}`, 15, 92);
     doc.setFont('helvetica', 'bold');
-    doc.text('OBLIGADO A LLEVAR CONTABILIDAD: NO', 15, 101);
+    doc.setFontSize(7);
+    doc.text('OBLIGADO A LLEVAR CONTABILIDAD: ' + (emitter.obligadoContabilidad || "NO"), 15, 96);
+    if (emitter.regimen) {
+      doc.text('Régimen: ' + emitter.regimen, 15, 99);
+      if (emitter.regimen.toUpperCase().includes("RIMPE")) {
+        doc.text('Contribuyente Régimen RIMPE', 15, 102);
+      }
+    }
     doc.setLineWidth(0.3);
     doc.roundedRect(105, 10, 95, 94, 3, 3, 'S');
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text(`R.U.C.: ${EMITTER_INFO.ruc}`, 110, 20);
+    doc.text(`R.U.C.: ${emitter.ruc}`, 110, 20);
     doc.setFontSize(14);
     doc.text('FACTURA', 110, 30);
     doc.setFontSize(11);
@@ -201,13 +235,21 @@ function createPDFDoc(data: PDFData) {
       doc.text(value, valueX - 2, currentY + 3.5, { align: 'right' });
       currentY += rowHeight;
     };
-    drawTotalRow('SUBTOTAL 15%', `$0.00`);
-    drawTotalRow('SUBTOTAL 0%', `$${safe(data.total).toFixed(2)}`);
-    drawTotalRow('SUBTOTAL NO OBJETO DE IVA', '$0.00');
-    drawTotalRow('SUBTOTAL EXENTO DE IVA', '$0.00');
-    drawTotalRow('SUBTOTAL SIN IMPUESTOS', `$${safe(data.total).toFixed(2)}`);
+    const sub15 = data.subtotal15 !== undefined ? data.subtotal15 : 0;
+    const sub0 = data.subtotal0 !== undefined ? data.subtotal0 : data.total;
+    const subNoObj = data.subtotalNoObjeto !== undefined ? data.subtotalNoObjeto : 0;
+    const subEx = data.subtotalExento !== undefined ? data.subtotalExento : 0;
+    const subtotalSinImp = data.subtotal !== undefined ? data.subtotal : data.total;
+    const ivaValue = data.iva15 !== undefined ? data.iva15 : 0;
+
+    drawTotalRow('SUBTOTAL 15%', `$${safe(sub15).toFixed(2)}`);
+    drawTotalRow('SUBTOTAL 0%', `$${safe(sub0).toFixed(2)}`);
+    drawTotalRow('SUBTOTAL NO OBJETO DE IVA', `$${safe(subNoObj).toFixed(2)}`);
+    drawTotalRow('SUBTOTAL EXENTO DE IVA', `$${safe(subEx).toFixed(2)}`);
+    drawTotalRow('SUBTOTAL SIN IMPUESTOS', `$${safe(subtotalSinImp).toFixed(2)}`);
     drawTotalRow('TOTAL DESCUENTO', '$0.00');
     drawTotalRow('ICE', '$0.00');
+    drawTotalRow('IVA 15%', `$${safe(ivaValue).toFixed(2)}`);
     drawTotalRow('IVA 0%', `$0.00`);
     drawTotalRow('IRBPNR', '$0.00');
     drawTotalRow('PROPINA', '$0.00');
@@ -226,9 +268,9 @@ function createPDFDoc(data: PDFData) {
     doc.setFontSize(8); doc.setFont('helvetica', 'bold');
     doc.text('DATOS DEL EMISOR', 195, 35, { align: 'right' });
     doc.setFont('helvetica', 'normal');
-    doc.text(EMITTER_INFO.name, 195, 39, { align: 'right' });
-    doc.text(`RUC: ${EMITTER_INFO.ruc}`, 195, 43, { align: 'right' });
-    doc.text(EMITTER_INFO.address, 195, 47, { align: 'right', maxWidth: 80 });
+    doc.text(emitter.name, 195, 39, { align: 'right' });
+    doc.text(`RUC: ${emitter.ruc}`, 195, 43, { align: 'right' });
+    doc.text(emitter.address, 195, 47, { align: 'right', maxWidth: 80 });
     doc.text(`Telf: ${EMITTER_INFO.phones}`, 195, 55, { align: 'right', maxWidth: 80 });
     doc.text(`Email: ${EMITTER_INFO.email}`, 195, 63, { align: 'right' });
     doc.setDrawColor(...primaryColor); doc.setLineWidth(0.5);
@@ -252,12 +294,21 @@ function createPDFDoc(data: PDFData) {
     
     const finalYTable = (doc as any).lastAutoTable.finalY + 10;
     
+    const sub15 = data.subtotal15 !== undefined ? data.subtotal15 : 0;
+    const sub0 = data.subtotal0 !== undefined ? data.subtotal0 : data.total;
+    const ivaVal = data.iva15 !== undefined ? data.iva15 : 0;
+
     // Right summary section
     doc.setFontSize(10); doc.setFont('helvetica', 'normal');
     doc.text(`SUBTOTAL:`, 140, finalYTable);
-    doc.text(`$${safe(data.total).toFixed(2)}`, 195, finalYTable, { align: 'right' });
-    doc.text(`IVA (0%):`, 140, finalYTable + 6);
-    doc.text(`$0.00`, 195, finalYTable + 6, { align: 'right' });
+    doc.text(`$${safe(data.subtotal !== undefined ? data.subtotal : data.total).toFixed(2)}`, 195, finalYTable, { align: 'right' });
+    if (sub15 > 0) {
+      doc.text(`IVA (15%):`, 140, finalYTable + 6);
+      doc.text(`$${safe(ivaVal).toFixed(2)}`, 195, finalYTable + 6, { align: 'right' });
+    } else {
+      doc.text(`IVA (0%):`, 140, finalYTable + 6);
+      doc.text(`$0.00`, 195, finalYTable + 6, { align: 'right' });
+    }
     
     doc.setFontSize(12); doc.setFont('helvetica', 'bold');
     doc.text(`VALOR TOTAL:`, 140, finalYTable + 14);

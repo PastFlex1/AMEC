@@ -26,6 +26,7 @@ export interface SRIInvoiceData {
     cantidad: number;
     precioUnitario: number;
     descuento?: number;
+    ivaRate?: string | number;
   }>;
   formaPago: string;
   tipoComprobante?: string; // "01" Factura, "04" Nota de Crédito
@@ -37,6 +38,8 @@ export interface SRIInvoiceData {
   transferNumber?: string;
   deposit?: number;
   balance?: number;
+  regimen?: string;
+  obligadoContabilidad?: string;
 }
 
 /**
@@ -48,24 +51,34 @@ const safe = (n: any) => Number(n || 0);
  * Algoritmo Módulo 11 exacto proporcionado por el usuario.
  */
 export function modulo11(cadena: string): number {
-  let factor = 2;
   let suma = 0;
-
+  let factor = 2;
   for (let i = cadena.length - 1; i >= 0; i--) {
-    suma += parseInt(cadena[i]) * factor;
-    factor++;
-    if (factor > 7) {
-      factor = 2;
-    }
+    suma += parseInt(cadena.charAt(i), 10) * factor;
+    factor = factor === 7 ? 2 : factor + 1;
   }
-
-  let residuo = suma % 11;
-  let digito = 11 - residuo;
-
-  if (digito === 11) digito = 0;
-  if (digito === 10) digito = 1;
-
+  const residuo = suma % 11;
+  const digito = 11 - residuo;
+  if (digito === 11) return 0;
+  if (digito === 10) return 1;
   return digito;
+}
+
+/**
+ * Mapea las tarifas de IVA locales a los códigos requeridos por el SRI.
+ */
+export function getIvaMapping(ivaRate: string | number | undefined) {
+  const rateStr = String(ivaRate || "0").trim();
+  if (rateStr === "15") {
+    return { codigoPorcentaje: "4", tarifa: "15", multiplier: 0.15 };
+  } else if (rateStr === "0") {
+    return { codigoPorcentaje: "0", tarifa: "0", multiplier: 0 };
+  } else if (rateStr === "No objeto") {
+    return { codigoPorcentaje: "6", tarifa: "0", multiplier: 0 };
+  } else if (rateStr === "Exento") {
+    return { codigoPorcentaje: "7", tarifa: "0", multiplier: 0 };
+  }
+  return { codigoPorcentaje: "0", tarifa: "0", multiplier: 0 };
 }
 
 /**
@@ -93,18 +106,25 @@ export function generateAccessKey(data: SRIInvoiceData): string {
 export function generateInvoiceXML(data: SRIInvoiceData): string {
   const claveAcceso = generateAccessKey(data);
   
-  // Cálculos robustos con la solución PRO
-  const subtotalTotal = (data.items || []).reduce(
-    (acc, i) => acc + (safe(i.cantidad) * safe(i.precioUnitario)),
-    0
-  );
+  // Tax grouping and calculations
+  const taxGroups: { [key: string]: { base: number; valor: number; codigoPorcentaje: string } } = {};
+  (data.items || []).forEach(i => {
+    const mapping = getIvaMapping(i.ivaRate);
+    const key = `${mapping.codigoPorcentaje}`;
+    const totalLine = safe(i.cantidad) * safe(i.precioUnitario);
+    const baseVal = mapping.tarifa === "15" ? (totalLine / 1.15) : totalLine;
+    const taxVal = mapping.tarifa === "15" ? (totalLine - baseVal) : 0;
+    
+    if (!taxGroups[key]) {
+      taxGroups[key] = { base: 0, valor: 0, codigoPorcentaje: mapping.codigoPorcentaje };
+    }
+    taxGroups[key].base += baseVal;
+    taxGroups[key].valor += taxVal;
+  });
 
-  const totalConImpuestosCalculado = (data.items || []).reduce(
-    (acc, i) => acc + (safe(i.cantidad) * safe(i.precioUnitario)),
-    0
-  );
-
-  const valorIVA = safe(totalConImpuestosCalculado) - safe(subtotalTotal);
+  const subtotalTotal = Object.values(taxGroups).reduce((acc, g) => acc + g.base, 0);
+  const valorIVA = Object.values(taxGroups).reduce((acc, g) => acc + g.valor, 0);
+  const totalConImpuestosCalculado = subtotalTotal + valorIVA;
 
   let tipoId = "05";
   const idStr = data.cliente.identificacion || "";
@@ -132,12 +152,15 @@ export function generateInvoiceXML(data: SRIInvoiceData): string {
   xml += `        <ptoEmi>${data.ptoEmi.padStart(3, "0")}</ptoEmi>\n`;
   xml += `        <secuencial>${data.secuencial.padStart(9, "0")}</secuencial>\n`;
   xml += `        <dirMatriz>${data.dirMatriz}</dirMatriz>\n`;
+  if (data.regimen && data.regimen.toUpperCase().includes("RIMPE")) {
+    xml += `        <contribuyenteRimpe>Contribuyente Régimen RIMPE</contribuyenteRimpe>\n`;
+  }
   xml += `    </infoTributaria>\n\n`;
 
   xml += `    <infoFactura>\n`;
   xml += `        <fechaEmision>${data.fechaEmision}</fechaEmision>\n`;
   xml += `        <dirEstablecimiento>${data.dirMatriz}</dirEstablecimiento>\n`;
-  xml += `        <obligadoContabilidad>NO</obligadoContabilidad>\n`;
+  xml += `        <obligadoContabilidad>${data.obligadoContabilidad || "NO"}</obligadoContabilidad>\n`;
   xml += `        <tipoIdentificacionComprador>${tipoId}</tipoIdentificacionComprador>\n`;
   xml += `        <razonSocialComprador>${data.cliente.razonSocial}</razonSocialComprador>\n`;
   xml += `        <identificacionComprador>${data.cliente.identificacion}</identificacionComprador>\n`;
@@ -146,12 +169,14 @@ export function generateInvoiceXML(data: SRIInvoiceData): string {
   xml += `        <totalDescuento>0.00</totalDescuento>\n\n`;
 
   xml += `        <totalConImpuestos>\n`;
-  xml += `            <totalImpuesto>\n`;
-  xml += `                <codigo>2</codigo>\n`; 
-  xml += `                <codigoPorcentaje>0</codigoPorcentaje>\n`; 
-  xml += `                <baseImponible>${safe(subtotalTotal).toFixed(2)}</baseImponible>\n`;
-  xml += `                <valor>0.00</valor>\n`;
-  xml += `            </totalImpuesto>\n`;
+  Object.values(taxGroups).forEach(group => {
+    xml += `            <totalImpuesto>\n`;
+    xml += `                <codigo>2</codigo>\n`; 
+    xml += `                <codigoPorcentaje>${group.codigoPorcentaje}</codigoPorcentaje>\n`; 
+    xml += `                <baseImponible>${group.base.toFixed(2)}</baseImponible>\n`;
+    xml += `                <valor>${group.valor.toFixed(2)}</valor>\n`;
+    xml += `            </totalImpuesto>\n`;
+  });
   xml += `        </totalConImpuestos>\n\n`;
 
   xml += `        <propina>0.00</propina>\n`;
@@ -169,24 +194,26 @@ export function generateInvoiceXML(data: SRIInvoiceData): string {
 
   xml += `    <detalles>\n`;
   (data.items || []).forEach((item, index) => {
-    const subTotalItem = safe(item.cantidad) * safe(item.precioUnitario);
-    const totalItem = safe(item.cantidad) * safe(item.precioUnitario);
-    const ivaItem = 0;
+    const totalLine = safe(item.cantidad) * safe(item.precioUnitario);
+    const mapping = getIvaMapping(item.ivaRate);
+    const baseVal = mapping.tarifa === "15" ? (totalLine / 1.15) : totalLine;
+    const taxVal = mapping.tarifa === "15" ? (totalLine - baseVal) : 0;
+    const unitPriceSinIva = safe(item.cantidad) > 0 ? (baseVal / safe(item.cantidad)) : safe(item.precioUnitario);
     
     xml += `        <detalle>\n`;
     xml += `            <codigoPrincipal>${item.codigo || (index + 1).toString().padStart(3, '0')}</codigoPrincipal>\n`;
     xml += `            <descripcion>${item.descripcion}</descripcion>\n`;
     xml += `            <cantidad>${safe(item.cantidad).toFixed(2)}</cantidad>\n`;
-    xml += `            <precioUnitario>${safe(item.precioUnitario).toFixed(6)}</precioUnitario>\n`;
+    xml += `            <precioUnitario>${unitPriceSinIva.toFixed(6)}</precioUnitario>\n`;
     xml += `            <descuento>0.00</descuento>\n`;
-    xml += `            <precioTotalSinImpuesto>${safe(subTotalItem).toFixed(2)}</precioTotalSinImpuesto>\n\n`;
+    xml += `            <precioTotalSinImpuesto>${safe(baseVal).toFixed(2)}</precioTotalSinImpuesto>\n\n`;
     xml += `            <impuestos>\n`;
     xml += `                <impuesto>\n`;
     xml += `                    <codigo>2</codigo>\n`; 
-    xml += `                    <codigoPorcentaje>0</codigoPorcentaje>\n`; 
-    xml += `                    <tarifa>0</tarifa>\n`; 
-    xml += `                    <baseImponible>${safe(subTotalItem).toFixed(2)}</baseImponible>\n`;
-    xml += `                    <valor>0.00</valor>\n`;
+    xml += `                    <codigoPorcentaje>${mapping.codigoPorcentaje}</codigoPorcentaje>\n`; 
+    xml += `                    <tarifa>${mapping.tarifa}</tarifa>\n`; 
+    xml += `                    <baseImponible>${safe(baseVal).toFixed(2)}</baseImponible>\n`;
+    xml += `                    <valor>${safe(taxVal).toFixed(2)}</valor>\n`;
     xml += `                </impuesto>\n`;
     xml += `            </impuestos>\n\n`;
     xml += `        </detalle>\n`;
@@ -258,6 +285,9 @@ export function generateCreditNoteXML(data: SRIInvoiceData): string {
   xml += `        <ptoEmi>${data.ptoEmi.padStart(3, "0")}</ptoEmi>\n`;
   xml += `        <secuencial>${data.secuencial.padStart(9, "0")}</secuencial>\n`;
   xml += `        <dirMatriz>${data.dirMatriz}</dirMatriz>\n`;
+  if (data.regimen && data.regimen.toUpperCase().includes("RIMPE")) {
+    xml += `        <contribuyenteRimpe>Contribuyente Régimen RIMPE</contribuyenteRimpe>\n`;
+  }
   xml += `    </infoTributaria>\n\n`;
 
   xml += `    <infoNotaCredito>\n`;

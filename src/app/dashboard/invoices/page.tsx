@@ -66,8 +66,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, doc, deleteDoc, query, orderBy, updateDoc, serverTimestamp, addDoc } from "firebase/firestore";
+import { collection, doc, deleteDoc, query, orderBy, updateDoc, serverTimestamp, addDoc, getDoc } from "firebase/firestore";
 import { syncDailyCashClosing } from "@/lib/cash-register-service";
+import { DEFAULT_TAX_CONFIG, TaxConfig } from "@/lib/config-helper";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -91,9 +92,19 @@ const PAYMENT_METHODS = [
 export default function InvoicesPage() {
   const { toast } = useToast();
   const db = useFirestore();
+  const [taxConfig, setTaxConfig] = useState<TaxConfig>(DEFAULT_TAX_CONFIG);
   const [searchTerm, setSearchTerm] = useState("");
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>("");
+
+  useEffect(() => {
+    if (!db) return;
+    getDoc(doc(db, "taxConfig", "current")).then((snap) => {
+      if (snap.exists()) {
+        setTaxConfig(snap.data() as TaxConfig);
+      }
+    }).catch((err) => console.error("Error al cargar config de emisor:", err));
+  }, [db]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -200,8 +211,15 @@ export default function InvoicesPage() {
         },
         items: inv.items || [],
         total: inv.total || 0,
-        subtotal: inv.total || 0,
-        iva: 0,
+        subtotal: inv.subtotalBase !== undefined ? inv.subtotalBase : (inv.total || 0),
+        iva: inv.ivaCalculated !== undefined ? inv.ivaCalculated : 0,
+        subtotal15: inv.subtotal15 !== undefined ? inv.subtotal15 : 0,
+        subtotal0: inv.subtotal0 !== undefined ? inv.subtotal0 : (inv.total || 0),
+        subtotalNoObjeto: inv.subtotalNoObjeto !== undefined ? inv.subtotalNoObjeto : 0,
+        subtotalExento: inv.subtotalExento !== undefined ? inv.subtotalExento : 0,
+        iva15: inv.ivaCalculated !== undefined ? inv.ivaCalculated : 0,
+        regimen: taxConfig.regimen,
+        obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO",
         date: formatDocDate(inv.date),
         docNumber: inv.invoiceNumber,
         accessKey: inv.claveAcceso,
@@ -224,11 +242,11 @@ export default function InvoicesPage() {
       }
 
       const xml = generateInvoiceXML({
-        rucEmisor: "1725389454001",
-        razonSocialEmisor: "Andrés Paul Morales Tobar",
-        dirMatriz: "Av Jaime roldos oe2-128 y Francisco Sánchez",
-        estab: "001",
-        ptoEmi: "100",
+        rucEmisor: taxConfig.ruc,
+        razonSocialEmisor: taxConfig.razonSocial,
+        dirMatriz: taxConfig.dirMatriz,
+        estab: taxConfig.estab,
+        ptoEmi: taxConfig.ptoEmi,
         secuencial: inv.invoiceNumber.split("-")[2],
         fechaEmision: formatDocDate(inv.date),
         cliente: {
@@ -327,11 +345,11 @@ export default function InvoicesPage() {
     setLoadingAnnul(true);
     try {
       const ncXml = generateCreditNoteXML({
-        rucEmisor: "1725389454001",
-        razonSocialEmisor: "Andrés Paul Morales Tobar",
-        dirMatriz: "Av Jaime roldos oe2-128 y Francisco Sánchez",
-        estab: "001",
-        ptoEmi: "100",
+        rucEmisor: taxConfig.ruc,
+        razonSocialEmisor: taxConfig.razonSocial,
+        dirMatriz: taxConfig.dirMatriz,
+        estab: taxConfig.estab,
+        ptoEmi: taxConfig.ptoEmi,
         secuencial: "999" + invoiceToAnnul.invoiceNumber.split("-")[2].substring(3), 
         fechaEmision: format(new Date(), "dd/MM/yyyy"),
         cliente: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { 
   CheckCircle2, 
   Search, 
@@ -25,9 +25,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection } from "firebase/firestore";
+import { collection, getDoc, doc } from "firebase/firestore";
 import { format, parseISO, isToday } from "date-fns";
 import { es } from "date-fns/locale";
+import { DEFAULT_TAX_CONFIG, TaxConfig } from "@/lib/config-helper";
 import { generateBillingPDF, getBillingPDFBase64 } from "@/lib/pdf-service";
 import { generateInvoiceXML, downloadXML } from "@/lib/sri-xml-service";
 import { sendBillingEmail } from "@/app/actions/email-actions";
@@ -36,8 +37,18 @@ import { useToast } from "@/hooks/use-toast";
 export default function AuthorizedInvoicesPage() {
   const { toast } = useToast();
   const db = useFirestore();
+  const [taxConfig, setTaxConfig] = useState<TaxConfig>(DEFAULT_TAX_CONFIG);
   const [searchTerm, setSearchTerm] = useState("");
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!db) return;
+    getDoc(doc(db, "taxConfig", "current")).then((snap) => {
+      if (snap.exists()) {
+        setTaxConfig(snap.data() as TaxConfig);
+      }
+    }).catch((err) => console.error("Error al cargar config de emisor:", err));
+  }, [db]);
 
   const invoicesRef = useMemo(() => (db ? collection(db, "invoices") : null), [db]);
   const { data: allInvoices, loading } = useCollection(invoicesRef);
@@ -128,11 +139,11 @@ export default function AuthorizedInvoicesPage() {
       }
 
       const xml = generateInvoiceXML({
-        rucEmisor: "1725389454001",
-        razonSocialEmisor: "Andrés Paul Morales Tobar",
-        dirMatriz: "QUITO / CARCELÉN",
-        estab: "001",
-        ptoEmi: "100",
+        rucEmisor: taxConfig.ruc,
+        razonSocialEmisor: taxConfig.razonSocial,
+        dirMatriz: taxConfig.dirMatriz,
+        estab: taxConfig.estab,
+        ptoEmi: taxConfig.ptoEmi,
         secuencial: inv.invoiceNumber.split("-")[2],
         fechaEmision: formatDocDate(inv.date),
         cliente: {
@@ -144,9 +155,12 @@ export default function AuthorizedInvoicesPage() {
         items: (inv.items || []).map((item: any) => ({
           descripcion: item.description,
           cantidad: item.cantidad,
-          precioUnitario: item.unitPrice
+          precioUnitario: item.unitPrice,
+          ivaRate: item.ivaRate
         })),
-        formaPago: inv.clientData?.paymentMethod || "01"
+        formaPago: inv.clientData?.paymentMethod || "01",
+        regimen: taxConfig.regimen,
+        obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO"
       });
       downloadXML(xml, `Factura_Autorizada_${inv.invoiceNumber}.xml`);
       toast({ title: "XML Descargado" });

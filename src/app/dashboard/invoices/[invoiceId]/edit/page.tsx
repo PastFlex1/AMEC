@@ -27,7 +27,8 @@ import {
   Ban,
   ShieldAlert,
   UserPlus,
-  DollarSign
+  DollarSign,
+  Info
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,7 +56,7 @@ import {
   TooltipContent
 } from "@/components/ui/tooltip";
 import { useFirestore, useDoc, useCollection } from "@/firebase";
-import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc, getDoc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { generateBillingPDF, getBillingPDFBase64 } from "@/lib/pdf-service";
@@ -64,6 +65,8 @@ import { emitirFacturaAction } from "@/app/actions/sri-actions";
 import { generateInvoiceXML, generateCreditNoteXML, downloadXML } from "@/lib/sri-xml-service";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { DEFAULT_TAX_CONFIG, TaxConfig } from "@/lib/config-helper";
 
 const PAYMENT_METHODS = [
   { code: "01", label: "SIN UTILIZACIÓN DEL SISTEMA FINANCIERO" },
@@ -81,12 +84,22 @@ export default function EditInvoicePage() {
   const invoiceId = params.invoiceId as string;
   const { toast } = useToast();
   const db = useFirestore();
+  const [taxConfig, setTaxConfig] = useState<TaxConfig>(DEFAULT_TAX_CONFIG);
   
   const invoiceRef = useMemo(() => (db ? doc(db, "invoices", invoiceId) : null), [db, invoiceId]);
   const { data: invoice, loading: loadingDoc } = useDoc<any>(invoiceRef);
 
   const productsRef = useMemo(() => (db ? collection(db, "products") : null), [db]);
   const { data: availableProducts } = useCollection(productsRef);
+
+  useEffect(() => {
+    if (!db) return;
+    getDoc(doc(db, "taxConfig", "current")).then((snap) => {
+      if (snap.exists()) {
+        setTaxConfig(snap.data() as TaxConfig);
+      }
+    }).catch((err) => console.error("Error al cargar config de emisor:", err));
+  }, [db]);
 
   const [date, setDate] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -148,10 +161,52 @@ export default function EditInvoicePage() {
   const isAnnulled = currentStatus === 'Anulada';
   const isReadOnly = isAuthorized || isAnnulled;
 
-  const totalWithIVA = items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
-  const subtotalBase = totalWithIVA;
-  const ivaCalculated = 0;
-  const balance = Math.max(0, totalWithIVA - deposit);
+  const subtotal15 = useMemo(() => {
+    return items.reduce((acc, item) => {
+      if (item.description.trim() === "") return acc;
+      return acc + (item.ivaRate === "15" ? ((item.quantity * item.unitPrice) / 1.15) : 0);
+    }, 0);
+  }, [items]);
+
+  const subtotal0 = useMemo(() => {
+    return items.reduce((acc, item) => {
+      if (item.description.trim() === "") return acc;
+      return acc + (item.ivaRate === "0" ? (item.quantity * item.unitPrice) : 0);
+    }, 0);
+  }, [items]);
+
+  const subtotalNoObjeto = useMemo(() => {
+    return items.reduce((acc, item) => {
+      if (item.description.trim() === "") return acc;
+      return acc + (item.ivaRate === "No objeto" ? (item.quantity * item.unitPrice) : 0);
+    }, 0);
+  }, [items]);
+
+  const subtotalExento = useMemo(() => {
+    return items.reduce((acc, item) => {
+      if (item.description.trim() === "") return acc;
+      return acc + (item.ivaRate === "Exento" ? (item.quantity * item.unitPrice) : 0);
+    }, 0);
+  }, [items]);
+
+  const subtotalBase = useMemo(() => {
+    return subtotal15 + subtotal0 + subtotalNoObjeto + subtotalExento;
+  }, [subtotal15, subtotal0, subtotalNoObjeto, subtotalExento]);
+
+  const ivaCalculated = useMemo(() => {
+    return subtotal15 * 0.15;
+  }, [subtotal15]);
+
+  const totalWithIVA = useMemo(() => {
+    return items.reduce((acc, item) => {
+      if (item.description.trim() === "") return acc;
+      return acc + (item.quantity * item.unitPrice);
+    }, 0);
+  }, [items]);
+
+  const balance = useMemo(() => {
+    return Math.max(0, totalWithIVA - deposit);
+  }, [totalWithIVA, deposit]);
 
   const handleLookupCustomer = async () => {
     if (!db || !clientData.ruc) return;
@@ -204,10 +259,37 @@ export default function EditInvoicePage() {
     if (!invoiceRef || isReadOnly) return;
     const isSilent = customStatus !== undefined;
     if (!isSilent) setLoadingAction('save');
+
+    if (!taxConfig || !taxConfig.ruc) {
+      toast({ title: "Emisor no configurado", description: "Falta configurar los datos tributarios del emisor.", variant: "destructive" });
+      return;
+    }
+    if (!taxConfig.regimen) {
+      toast({ title: "Régimen no configurado", description: "El régimen tributario del emisor no puede estar vacío.", variant: "destructive" });
+      return;
+    }
+
+    const activeItems = items.filter(i => i.description.trim() !== "");
+    const missingIva = activeItems.some(i => i.ivaRate === undefined || i.ivaRate === null || i.ivaRate === "");
+    if (missingIva) {
+      toast({
+        title: "Tarifa de IVA faltante",
+        description: "Existen productos sin tarifa de IVA configurada. Por favor, corríjalos antes de facturar.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const updateData: any = {
         clientData: { ...clientData },
         items: items.filter(i => i.description.trim() !== ""),
+        subtotal15,
+        subtotal0,
+        subtotalNoObjeto,
+        subtotalExento,
+        subtotalBase,
+        ivaCalculated,
         total: totalWithIVA,
         deposit: deposit,
         balance: balance,
@@ -245,18 +327,23 @@ export default function EditInvoicePage() {
     setLoadingAction('annul');
     try {
       const ncXml = generateCreditNoteXML({
-        rucEmisor: "1725389454001",
-        razonSocialEmisor: "Andrés Paul Morales Tobar",
-        dirMatriz: "Av Jaime roldos oe2-128 y Francisco Sánchez",
-        estab: "001",
-        ptoEmi: "100",
+        rucEmisor: taxConfig.ruc,
+        razonSocialEmisor: taxConfig.razonSocial,
+        dirMatriz: taxConfig.dirMatriz,
+        estab: taxConfig.estab,
+        ptoEmi: taxConfig.ptoEmi,
         secuencial: "999" + invoice.invoiceNumber.split("-")[2].substring(3), 
         fechaEmision: format(new Date(), "dd/MM/yyyy"),
         cliente: {
           razonSocial: clientData.name,
           identificacion: clientData.ruc
         },
-        items: items.filter(i => i.description.trim() !== ""),
+        items: items.filter(i => i.description.trim() !== "").map(i => ({
+          descripcion: i.description,
+          cantidad: i.quantity,
+          precioUnitario: i.unitPrice,
+          ivaRate: i.ivaRate
+        })),
         formaPago: clientData.paymentMethod,
         tipoComprobante: "04",
         facturaModificada: {
@@ -300,11 +387,11 @@ export default function EditInvoicePage() {
 
     try {
       const xmlBase = generateInvoiceXML({
-        rucEmisor: "1725389454001",
-        razonSocialEmisor: "Andrés Paul Morales Tobar",
-        dirMatriz: "Av Jaime roldos oe2-128 y Francisco Sánchez",
-        estab: "001",
-        ptoEmi: "100",
+        rucEmisor: taxConfig.ruc,
+        razonSocialEmisor: taxConfig.razonSocial,
+        dirMatriz: taxConfig.dirMatriz,
+        estab: taxConfig.estab,
+        ptoEmi: taxConfig.ptoEmi,
         secuencial: invoice?.invoiceNumber.split("-")[2],
         fechaEmision: format(date, "dd/MM/yyyy"),
         cliente: {
@@ -317,7 +404,8 @@ export default function EditInvoicePage() {
         items: items.filter(i => i.description.trim() !== "").map(i => ({
           descripcion: i.description,
           cantidad: i.quantity,
-          precioUnitario: i.unitPrice
+          precioUnitario: i.unitPrice,
+          ivaRate: i.ivaRate
         })),
         formaPago: clientData.paymentMethod,
         observaciones: observations,
@@ -351,6 +439,13 @@ export default function EditInvoicePage() {
         subtotal: subtotalBase,
         iva: ivaCalculated,
         total: totalWithIVA,
+        subtotal15,
+        subtotal0,
+        subtotalNoObjeto,
+        subtotalExento,
+        iva15: ivaCalculated,
+        regimen: taxConfig.regimen,
+        obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO",
         deposit,
         balance,
         date: format(date, "dd/MM/yyyy"),
@@ -374,6 +469,13 @@ export default function EditInvoicePage() {
         subtotal: subtotalBase,
         iva: ivaCalculated,
         total: totalWithIVA,
+        subtotal15,
+        subtotal0,
+        subtotalNoObjeto,
+        subtotalExento,
+        iva15: ivaCalculated,
+        regimen: taxConfig.regimen,
+        obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO",
         deposit,
         balance,
         date: format(date, "dd/MM/yyyy"),
@@ -459,6 +561,18 @@ export default function EditInvoicePage() {
             )}
           </div>
         </div>
+
+        {/* Banner informativo de obligaciones SRI */}
+        <Alert className="bg-amber-50 border-amber-200 text-amber-900 rounded-2xl p-4 shadow-sm flex items-start gap-3">
+          <Info className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <AlertTitle className="font-bold text-amber-800">Obligación Tributaria SRI</AlertTitle>
+            <AlertDescription className="text-xs font-medium text-amber-700">
+              El contribuyente pertenece al régimen **{taxConfig.regimen}** y tiene la obligación de realizar la **declaración semestral de IVA**.
+              El sistema requiere configurar una tarifa de IVA (0%, 15%, No Objeto o Exento) para cada producto facturado.
+            </AlertDescription>
+          </div>
+        </Alert>
 
         {isAnnulled && (
           <div className="bg-slate-100 border border-slate-200 p-4 rounded-2xl flex items-center gap-3 animate-in slide-in-from-top-4 duration-500">
@@ -609,7 +723,7 @@ export default function EditInvoicePage() {
                                      toast({ title: "Stock Insuficiente", description: `Se ajustó la cantidad a ${newQty} unidades.`, variant: "destructive" });
                                   }
                                   const newItems = [...items];
-                                  newItems[idx] = { ...newItems[idx], description: p.name, unitPrice: p.price, productId: p.id, maxStock: p.stock !== undefined ? p.stock : null, quantity: newQty };
+                                  newItems[idx] = { ...newItems[idx], description: p.name, unitPrice: p.price, productId: p.id, maxStock: p.stock !== undefined ? p.stock : null, quantity: newQty, ivaRate: p.ivaRate !== undefined ? p.ivaRate.toString() : null };
                                   setItems(newItems);
                                   setOpenPopoverId(null);
                                 }}>
@@ -635,12 +749,39 @@ export default function EditInvoicePage() {
                       }
                       const newItems = [...items]; newItems[idx].quantity = val; setItems(newItems); 
                     }} className="h-11 bg-white text-center font-bold" /></div>
-                    <div className="w-32 space-y-2"><Label className="text-[10px] font-black uppercase text-slate-400">P. Final</Label><Input type="number" value={item.unitPrice} disabled={isReadOnly} onChange={e => { const newItems = [...items]; newItems[idx].unitPrice = parseFloat(e.target.value) || 0; setItems(newItems); }} className="h-11 bg-white text-right font-black text-primary" /></div>
+                    <div className="w-32 space-y-2"><Label className="text-[10px] font-black uppercase text-slate-400">P. Unitario</Label><Input type="number" value={item.unitPrice} disabled={isReadOnly} onChange={e => { const newItems = [...items]; newItems[idx].unitPrice = parseFloat(e.target.value) || 0; setItems(newItems); }} className="h-11 bg-white text-right font-black text-primary" /></div>
+                    <div className="w-36 space-y-2">
+                      <Label className="text-[10px] font-black uppercase text-slate-400">Tarifa IVA</Label>
+                      <div className="relative">
+                        <Select 
+                          value={item.ivaRate || ""} 
+                          disabled={isReadOnly}
+                          onValueChange={(val) => {
+                            const newItems = [...items];
+                            newItems[idx].ivaRate = val;
+                            setItems(newItems);
+                          }}
+                        >
+                          <SelectTrigger className={cn("h-11 bg-white border-slate-200 font-bold", (!item.ivaRate || item.ivaRate === "") && "border-rose-300 bg-rose-50/50 text-rose-700")}>
+                            <SelectValue placeholder="Elegir Tarifa" />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-xl">
+                            <SelectItem value="15">IVA 15%</SelectItem>
+                            <SelectItem value="0">IVA 0%</SelectItem>
+                            <SelectItem value="No objeto">No Objeto</SelectItem>
+                            <SelectItem value="Exento">Exento</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {(!item.ivaRate || item.ivaRate === "") && (
+                          <span className="text-[9px] font-bold text-rose-500 mt-1 block">Requerido *</span>
+                        )}
+                      </div>
+                    </div>
                     {!isReadOnly && <div className="flex items-end"><Button variant="ghost" size="icon" onClick={() => setItems(items.filter((_, i) => i !== idx))} className="text-rose-500 h-11 w-11"><Trash2 className="h-5 w-5" /></Button></div>}
                   </div>
                 ))}
               </div>
-              {!isReadOnly && <Button onClick={() => setItems([...items, { id: Math.random().toString(36).substr(2, 9), description: "", quantity: 1, unitPrice: 0 }])} variant="outline" className="mt-6 border-dashed border-2 w-full h-14 font-bold text-primary"><Plus className="mr-2 h-4 w-4" /> Añadir Item</Button>}
+              {!isReadOnly && <Button onClick={() => setItems([...items, { id: Math.random().toString(36).substr(2, 9), description: "", quantity: 1, unitPrice: 0, ivaRate: null }])} variant="outline" className="mt-6 border-dashed border-2 w-full h-14 font-bold text-primary"><Plus className="mr-2 h-4 w-4" /> Añadir Item</Button>}
             </CardContent>
           </Card>
         </div>
@@ -648,8 +789,16 @@ export default function EditInvoicePage() {
         <div className="flex flex-col md:flex-row justify-end items-start gap-8 mt-8">
            <Card className="border-none shadow-xl bg-white rounded-3xl p-8 space-y-6 w-full md:w-96">
             <div className="space-y-4">
-              <div className="flex justify-between text-sm text-slate-500"><span>Subtotal (IVA 0%):</span><span>${subtotalBase.toFixed(2)}</span></div>
-              <div className="flex justify-between text-sm text-slate-500"><span>IVA 0%:</span><span>$0.00</span></div>
+              <div className="flex justify-between text-sm text-slate-500"><span>Subtotal IVA 15%:</span><span>${subtotal15.toFixed(2)}</span></div>
+              <div className="flex justify-between text-sm text-slate-500"><span>Subtotal IVA 0%:</span><span>${subtotal0.toFixed(2)}</span></div>
+              {subtotalNoObjeto > 0 && (
+                <div className="flex justify-between text-sm text-slate-500"><span>Subtotal No Objeto:</span><span>${subtotalNoObjeto.toFixed(2)}</span></div>
+              )}
+              {subtotalExento > 0 && (
+                <div className="flex justify-between text-sm text-slate-500"><span>Subtotal Exento:</span><span>${subtotalExento.toFixed(2)}</span></div>
+              )}
+              <div className="flex justify-between text-sm text-slate-500 border-t pt-2"><span>Subtotal sin Impuestos:</span><span>${subtotalBase.toFixed(2)}</span></div>
+              <div className="flex justify-between text-sm text-slate-500"><span>IVA 15%:</span><span>${ivaCalculated.toFixed(2)}</span></div>
               <div className="flex justify-between text-xl font-black border-t pt-4 text-slate-900"><span>TOTAL:</span><span>${totalWithIVA.toFixed(2)}</span></div>
             </div>
             
