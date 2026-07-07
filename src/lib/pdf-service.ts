@@ -391,9 +391,9 @@ function createTicketPDFDoc(data: PDFData) {
   let y = 28 + addrHeight;
   
   doc.setLineWidth(0.3);
-  doc.setLineDash([1, 1], 0);
+  (doc as any).setLineDash([1, 1], 0);
   doc.line(5, y, 75, y);
-  doc.setLineDash([], 0);
+  (doc as any).setLineDash([], 0);
   
   y += 6;
   doc.setFont('helvetica', 'bold');
@@ -414,9 +414,9 @@ function createTicketPDFDoc(data: PDFData) {
   doc.text(`RUC/CI: ${data.client.ruc}`, 5, y);
   y += 5;
   
-  doc.setLineDash([1, 1], 0);
+  (doc as any).setLineDash([1, 1], 0);
   doc.line(5, y, 75, y);
-  doc.setLineDash([], 0);
+  (doc as any).setLineDash([], 0);
   y += 5;
   
   doc.setFont('helvetica', 'bold');
@@ -425,9 +425,9 @@ function createTicketPDFDoc(data: PDFData) {
   doc.text('TOTAL', 75, y, { align: 'right' });
   y += 2;
   
-  doc.setLineDash([1, 1], 0);
+  (doc as any).setLineDash([1, 1], 0);
   doc.line(5, y, 75, y);
-  doc.setLineDash([], 0);
+  (doc as any).setLineDash([], 0);
   y += 5;
   
   doc.setFont('helvetica', 'normal');
@@ -444,9 +444,9 @@ function createTicketPDFDoc(data: PDFData) {
     y += (textLines.length * 4) + 2;
   });
   
-  doc.setLineDash([1, 1], 0);
+  (doc as any).setLineDash([1, 1], 0);
   doc.line(5, y, 75, y);
-  doc.setLineDash([], 0);
+  (doc as any).setLineDash([], 0);
   y += 6;
   
   doc.setFont('helvetica', 'normal');

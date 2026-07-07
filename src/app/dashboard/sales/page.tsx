@@ -50,7 +50,7 @@ export default function SalesDashboard() {
   const { data: notes, loading: noteLoading } = useCollection(salesNotesRef);
 
   const stats = useMemo(() => {
-    if (!userName) return { revenue: 0, count: 0, commission: 0, customers: 0 };
+    if (!userName) return { revenue: 0, count: 0, commission: 0, customers: 0, invoicesCount: 0, proformasCount: 0 };
 
     const myInvoices = (invoices || []).filter((i: any) => i.createdBy === userName);
     const myProformas = (proformas || []).filter((p: any) => p.createdBy === userName);

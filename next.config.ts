@@ -32,11 +32,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  experimental: {
-    serverActions: {
-      bodySizeLimit: "20mb",
-    },
-  },
+
   serverExternalPackages: ["jspdf", "jsbarcode"],
   output: "standalone",
 };
