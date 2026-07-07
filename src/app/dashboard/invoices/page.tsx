@@ -21,7 +21,8 @@ import {
   Lock,
   Ban,
   ShieldAlert,
-  CreditCard
+  CreditCard,
+  Printer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,7 +75,7 @@ import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
-import { generateBillingPDF, getBillingPDFBase64 } from "@/lib/pdf-service";
+import { generateBillingPDF, getBillingPDFBase64, generateThermalPDF } from "@/lib/pdf-service";
 import { generateInvoiceXML, generateCreditNoteXML, downloadXML } from "@/lib/sri-xml-service";
 import { sendBillingEmail } from "@/app/actions/email-actions";
 import { emitirFacturaAction } from "@/app/actions/sri-actions";
@@ -230,6 +231,42 @@ export default function InvoicesPage() {
       toast({ title: "RIDE Generado" });
     } catch (error) {
       toast({ title: "Error", description: "No se pudo generar el RIDE.", variant: "destructive" });
+    }
+  };
+
+  const handlePrintTicket = (inv: any) => {
+    try {
+      generateThermalPDF({
+        title: "Factura",
+        client: {
+          name: inv.clientData?.name || inv.customerName || "Consumidor Final",
+          ruc: inv.clientData?.ruc || inv.customerRuc || "9999999999999",
+          address: inv.clientData?.address || "S/N",
+          email: inv.clientData?.email || "N/A",
+          paymentMethod: inv.clientData?.paymentMethod || "01",
+          transferNumber: inv.clientData?.transferNumber
+        },
+        items: inv.items || [],
+        total: inv.total || 0,
+        subtotal: inv.subtotalBase !== undefined ? inv.subtotalBase : (inv.total || 0),
+        iva: inv.ivaCalculated !== undefined ? inv.ivaCalculated : 0,
+        subtotal15: inv.subtotal15 !== undefined ? inv.subtotal15 : 0,
+        subtotal0: inv.subtotal0 !== undefined ? inv.subtotal0 : (inv.total || 0),
+        subtotalNoObjeto: inv.subtotalNoObjeto !== undefined ? inv.subtotalNoObjeto : 0,
+        subtotalExento: inv.subtotalExento !== undefined ? inv.subtotalExento : 0,
+        iva15: inv.ivaCalculated !== undefined ? inv.ivaCalculated : 0,
+        regimen: taxConfig.regimen,
+        obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO",
+        date: formatDocDate(inv.date),
+        docNumber: inv.invoiceNumber,
+        accessKey: inv.claveAcceso,
+        status: inv.status,
+        time: inv.authDate,
+        observations: inv.observations
+      });
+      toast({ title: "Ticket Generado" });
+    } catch (error) {
+      toast({ title: "Error", description: "No se pudo generar el ticket.", variant: "destructive" });
     }
   };
 
@@ -596,6 +633,9 @@ export default function InvoicesPage() {
                               <DropdownMenuItem onSelect={() => handleDownloadRIDE(inv)} className="rounded-xl cursor-pointer py-3">
                                 <Download className="mr-3 h-4 w-4 text-primary" /> Descargar RIDE
                               </DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => handlePrintTicket(inv)} className="rounded-xl cursor-pointer py-3">
+                                <Printer className="mr-3 h-4 w-4 text-primary" /> Imprimir Ticket
+                              </DropdownMenuItem>
                               <DropdownMenuItem onSelect={() => handleDownloadXML(inv)} className="rounded-xl cursor-pointer py-3">
                                 <Code className="mr-3 h-4 w-4 text-primary" /> Descargar XML
                               </DropdownMenuItem>
@@ -799,6 +839,9 @@ export default function InvoicesPage() {
           <DialogFooter className="bg-slate-50 p-6 border-t border-slate-100 flex gap-2">
             <Button variant="outline" onClick={() => handleDownloadRIDE(selectedInvoice)} className="rounded-xl h-12 px-6 font-bold">
               <Download className="mr-2 h-4 w-4" /> RIDE
+            </Button>
+            <Button variant="outline" onClick={() => handlePrintTicket(selectedInvoice)} className="rounded-xl h-12 px-6 font-bold">
+              <Printer className="mr-2 h-4 w-4" /> Ticket
             </Button>
             <Button onClick={() => setIsDetailsOpen(false)} className="bg-slate-900 text-white font-black rounded-xl px-10 h-12">
               Cerrar

@@ -68,7 +68,7 @@ import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
-import { generateBillingPDF } from "@/lib/pdf-service";
+import { generateBillingPDF, generateThermalPDF } from "@/lib/pdf-service";
 
 const PAYMENT_METHODS = [
   { code: "01", label: "SIN UTILIZACIÓN DEL SISTEMA FINANCIERO" },
@@ -202,6 +202,38 @@ export default function ProformasPage() {
       toast({ title: "PDF Generado", description: "La proforma se ha descargado correctamente." });
     } catch (error) {
       toast({ title: "Error", description: "No se pudo generar el PDF.", variant: "destructive" });
+    }
+  };
+
+  const handlePrintTicket = (prof: any) => {
+    try {
+      const total = prof.total || 0;
+      const subtotal = total;
+      const iva = 0;
+      
+      generateThermalPDF({
+        title: "Proforma",
+        client: {
+          name: prof.clientData?.name || prof.customerName || "Cliente",
+          ruc: prof.clientData?.ruc || prof.ruc || "9999999999999",
+          address: prof.clientData?.address || "S/N",
+          email: prof.clientData?.email || "N/A"
+        },
+        items: (prof.items || []).map((item: any) => ({
+          description: item.description || "Producto",
+          quantity: item.quantity || 1,
+          unitPrice: item.unitPrice || 0
+        })),
+        subtotal,
+        iva,
+        total,
+        date: formatDocDate(prof.date),
+        docNumber: prof.proformaNumber || prof.id.substring(0, 8),
+        observations: prof.observations
+      });
+      toast({ title: "Ticket Generado" });
+    } catch (error) {
+      toast({ title: "Error", description: "No se pudo generar el Ticket.", variant: "destructive" });
     }
   };
 
@@ -423,6 +455,12 @@ export default function ProformasPage() {
                               onSelect={(e) => { e.preventDefault(); handleDownloadPDF(prof); }}
                             >
                               <Download className="mr-3 h-4 w-4 text-indigo-600" /> Descargar PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              className="rounded-xl cursor-pointer py-3 hover:bg-indigo-50 focus:bg-indigo-50"
+                              onSelect={(e) => { e.preventDefault(); handlePrintTicket(prof); }}
+                            >
+                              <Printer className="mr-3 h-4 w-4 text-indigo-600" /> Imprimir Ticket
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               className="rounded-xl cursor-pointer py-3 hover:bg-indigo-50 focus:bg-indigo-50"

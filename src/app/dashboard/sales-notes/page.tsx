@@ -70,7 +70,7 @@ import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
-import { generateBillingPDF } from "@/lib/pdf-service";
+import { generateBillingPDF, generateThermalPDF } from "@/lib/pdf-service";
 
 const PAYMENT_METHODS = [
   { code: "01", label: "SIN UTILIZACIÓN DEL SISTEMA FINANCIERO" },
@@ -205,6 +205,38 @@ export default function SalesNotesPage() {
       toast({ title: "PDF Generado", description: "La nota de venta se ha descargado exitosamente." });
     } catch (error) {
       toast({ title: "Error", description: "No se pudo generar el PDF.", variant: "destructive" });
+    }
+  };
+
+  const handlePrintTicket = (note: any) => {
+    try {
+      const total = note.total || 0;
+      const subtotal = total;
+      const iva = 0;
+      
+      generateThermalPDF({
+        title: "Nota de Venta",
+        client: {
+          name: note.clientData?.name || note.customerName || "Cliente",
+          ruc: note.clientData?.ruc || note.ruc || "9999999999999",
+          address: note.clientData?.address || "S/N",
+          email: note.clientData?.email || "N/A"
+        },
+        items: (note.items || []).map((item: any) => ({
+          description: item.description || "Producto",
+          quantity: item.quantity || 1,
+          unitPrice: item.unitPrice || 0
+        })),
+        subtotal,
+        iva,
+        total,
+        date: formatDocDate(note.date),
+        docNumber: note.noteNumber || note.id.substring(0, 8),
+        observations: note.observations
+      });
+      toast({ title: "Ticket Generado" });
+    } catch (error) {
+      toast({ title: "Error", description: "No se pudo generar el Ticket.", variant: "destructive" });
     }
   };
 
@@ -448,6 +480,12 @@ export default function SalesNotesPage() {
                               onSelect={(e) => { e.preventDefault(); handleDownloadPDF(note); }}
                             >
                               <Download className="mr-2 h-4 w-4" /> Descargar PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              className="cursor-pointer text-primary"
+                              onSelect={(e) => { e.preventDefault(); handlePrintTicket(note); }}
+                            >
+                              <Printer className="mr-2 h-4 w-4" /> Imprimir Ticket
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               className="cursor-pointer text-emerald-600 focus:bg-emerald-50 focus:text-emerald-700"

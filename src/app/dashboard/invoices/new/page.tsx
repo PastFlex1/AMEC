@@ -23,7 +23,8 @@ import {
   Info,
   Search,
   UserPlus,
-  DollarSign
+  DollarSign,
+  Printer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,7 +55,7 @@ import { useFirestore, useCollection } from "@/firebase";
 import { collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot, updateDoc, doc, where, getDocs, increment, getDoc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { generateBillingPDF, getBillingPDFBase64 } from "@/lib/pdf-service";
+import { generateBillingPDF, getBillingPDFBase64, generateThermalPDF } from "@/lib/pdf-service";
 import { sendBillingEmail } from "@/app/actions/email-actions";
 import { emitirFacturaAction } from "@/app/actions/sri-actions";
 import { generateInvoiceXML, downloadXML, generateAccessKey } from "@/lib/sri-xml-service";
@@ -81,7 +82,7 @@ export default function NewInvoicePage() {
   const [taxConfig, setTaxConfig] = useState<TaxConfig>(DEFAULT_TAX_CONFIG);
   const [date, setDate] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [loadingAction, setLoadingAction] = useState<'save' | 'pdf' | 'xml' | 'mail' | 'sri' | 'lookup' | 'save_customer' | null>(null);
+  const [loadingAction, setLoadingAction] = useState<'save' | 'pdf' | 'xml' | 'mail' | 'sri' | 'lookup' | 'save_customer' | 'ticket' | null>(null);
   const [showEmptyDataModal, setShowEmptyDataModal] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState("001-100-000000001");
   const [productSearch, setProductSearch] = useState("");
@@ -454,11 +455,49 @@ export default function NewInvoicePage() {
     } finally { setLoadingAction(null); }
   };
 
-  const handleDownloadRIDE = () => {
+  const handleDownloadRIDE = async () => {
     if (!clientData.name) { setShowEmptyDataModal(true); return; }
+    
+    const docId = await handleSave(currentStatus);
+    if (!docId) return;
+
     setLoadingAction('pdf');
     try {
       generateBillingPDF({
+        title: "Factura",
+        client: clientData,
+        items: items.filter(i => i.description.trim() !== ""),
+        subtotal: subtotalBase,
+        iva: ivaCalculated,
+        total: totalWithIVA,
+        subtotal15,
+        subtotal0,
+        subtotalNoObjeto,
+        subtotalExento,
+        iva15: ivaCalculated,
+        regimen: taxConfig.regimen,
+        obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO",
+        deposit,
+        balance,
+        date: format(date, "dd/MM/yyyy"),
+        docNumber: invoiceNumber,
+        accessKey: currentClaveAcceso || getClaveAccesoActual(), 
+        status: currentStatus,
+        time: authDate || undefined,
+        observations
+      });
+    } finally { setLoadingAction(null); }
+  };
+
+  const handlePrintTicket = async () => {
+    if (!clientData.name) { setShowEmptyDataModal(true); return; }
+    
+    const docId = await handleSave(currentStatus);
+    if (!docId) return;
+
+    setLoadingAction('ticket');
+    try {
+      generateThermalPDF({
         title: "Factura",
         client: clientData,
         items: items.filter(i => i.description.trim() !== ""),
@@ -493,6 +532,9 @@ export default function NewInvoicePage() {
 
   const handleSendEmail = async () => {
     if (!clientData.email) return toast({ title: "Email requerido", variant: "destructive" });
+
+    const docId = await handleSave(currentStatus);
+    if (!docId) return;
 
     setLoadingAction('mail');
     try {
@@ -564,6 +606,9 @@ export default function NewInvoicePage() {
             </Button>
             <Button variant="outline" onClick={handleDownloadXML} disabled={loadingAction !== null || currentStatus !== 'Autorizado'}>
               {loadingAction === 'xml' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Code className="mr-2 h-4 w-4" />} XML
+            </Button>
+            <Button variant="outline" onClick={handlePrintTicket} disabled={loadingAction !== null}>
+              {loadingAction === 'ticket' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Printer className="mr-2 h-4 w-4" />} Ticket
             </Button>
             <Button variant="outline" onClick={handleDownloadRIDE} disabled={loadingAction !== null}>
               {loadingAction === 'pdf' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <FileDown className="mr-2 h-4 w-4" />} RIDE

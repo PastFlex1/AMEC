@@ -19,7 +19,8 @@ import {
   FileWarning,
   Info,
   UserPlus,
-  DollarSign
+  DollarSign,
+  Printer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,7 +45,7 @@ import { useFirestore, useCollection } from "@/firebase";
 import { collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot, updateDoc, doc, where, getDocs, increment } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { generateBillingPDF, getBillingPDFBase64 } from "@/lib/pdf-service";
+import { generateBillingPDF, getBillingPDFBase64, generateThermalPDF } from "@/lib/pdf-service";
 import { sendBillingEmail } from "@/app/actions/email-actions";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -65,7 +66,7 @@ export default function NewProformaPage() {
   const db = useFirestore();
   const [date, setDate] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [loadingAction, setLoadingAction] = useState<'save' | 'pdf' | 'mail' | 'lookup' | 'save_customer' | null>(null);
+  const [loadingAction, setLoadingAction] = useState<'save' | 'pdf' | 'mail' | 'lookup' | 'save_customer' | 'ticket' | null>(null);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [showEmptyDataModal, setShowEmptyDataModal] = useState(false);
   const [isConsumidorFinal, setIsConsumidorFinal] = useState(false);
@@ -257,6 +258,14 @@ export default function NewProformaPage() {
     } finally { setLoadingAction(null); }
   };
 
+  const handlePrintTicket = () => {
+    setLoadingAction('ticket');
+    try {
+      generateThermalPDF({ title: "Proforma", client: clientData, items: items.filter(i => i.description.trim() !== ""), subtotal: subtotalBase, iva: ivaCalculated, total: totalWithIVA, deposit, balance, date: format(date, "dd/MM/yyyy"), docNumber: proformaNumber, observations });
+      toast({ title: "Ticket Generado" });
+    } finally { setLoadingAction(null); }
+  };
+
   const handleSendEmail = async () => {
     if (!clientData.email) return toast({ title: "Email requerido", variant: "destructive" });
     setLoadingAction('mail');
@@ -301,9 +310,18 @@ export default function NewProformaPage() {
           <Badge variant="secondary" className="font-mono text-sm px-3 py-1"><Hash className="h-3 w-3 mr-1" />{proformaNumber}</Badge>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={handleSendEmail} disabled={loadingAction !== null}><Mail className="mr-2 h-4 w-4" /> Email</Button>
-          <Button variant="outline" onClick={handleGeneratePDF} disabled={loadingAction !== null}><FileDown className="mr-2 h-4 w-4" /> PDF</Button>
-          <Button onClick={() => handleSave()} disabled={loadingAction !== null} className="bg-primary"><Save className="mr-2 h-4 w-4" /> Guardar</Button>
+          <Button variant="outline" onClick={handleSendEmail} disabled={loadingAction !== null}>
+            {loadingAction === 'mail' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />} Email
+          </Button>
+          <Button variant="outline" onClick={handleGeneratePDF} disabled={loadingAction !== null}>
+            {loadingAction === 'pdf' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />} PDF
+          </Button>
+          <Button variant="outline" onClick={handlePrintTicket} disabled={loadingAction !== null}>
+            {loadingAction === 'ticket' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />} Ticket
+          </Button>
+          <Button onClick={() => handleSave()} disabled={loadingAction !== null} className="bg-primary">
+            {loadingAction === 'save' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} Guardar
+          </Button>
         </div>
       </div>
 

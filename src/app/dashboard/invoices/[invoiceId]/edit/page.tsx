@@ -28,7 +28,8 @@ import {
   ShieldAlert,
   UserPlus,
   DollarSign,
-  Info
+  Info,
+  Printer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,7 +60,7 @@ import { useFirestore, useDoc, useCollection } from "@/firebase";
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc, getDoc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { generateBillingPDF, getBillingPDFBase64 } from "@/lib/pdf-service";
+import { generateBillingPDF, getBillingPDFBase64, generateThermalPDF } from "@/lib/pdf-service";
 import { sendBillingEmail } from "@/app/actions/email-actions";
 import { emitirFacturaAction } from "@/app/actions/sri-actions";
 import { generateInvoiceXML, generateCreditNoteXML, downloadXML } from "@/lib/sri-xml-service";
@@ -103,7 +104,7 @@ export default function EditInvoicePage() {
 
   const [date, setDate] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [loadingAction, setLoadingAction] = useState<'save' | 'pdf' | 'xml' | 'mail' | 'sri' | 'annul' | 'lookup' | 'save_customer' | null>(null);
+  const [loadingAction, setLoadingAction] = useState<'save' | 'pdf' | 'xml' | 'mail' | 'sri' | 'annul' | 'lookup' | 'save_customer' | 'ticket' | null>(null);
   const [productSearch, setProductSearch] = useState("");
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
   const [showAnnulDialog, setShowAnnulDialog] = useState(false);
@@ -429,7 +430,8 @@ export default function EditInvoicePage() {
     } finally { setLoadingAction(null); }
   };
 
-  const handleDownloadRIDE = () => {
+  const handleDownloadRIDE = async () => {
+    await handleSave(currentStatus);
     setLoadingAction('pdf');
     try {
       generateBillingPDF({
@@ -458,8 +460,39 @@ export default function EditInvoicePage() {
     } finally { setLoadingAction(null); }
   };
 
+  const handlePrintTicket = async () => {
+    await handleSave(currentStatus);
+    setLoadingAction('ticket');
+    try {
+      generateThermalPDF({
+        title: "Factura",
+        client: clientData,
+        items: items.filter(i => i.description.trim() !== ""),
+        subtotal: subtotalBase,
+        iva: ivaCalculated,
+        total: totalWithIVA,
+        subtotal15,
+        subtotal0,
+        subtotalNoObjeto,
+        subtotalExento,
+        iva15: ivaCalculated,
+        regimen: taxConfig.regimen,
+        obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO",
+        deposit,
+        balance,
+        date: format(date, "dd/MM/yyyy"),
+        docNumber: invoice?.invoiceNumber,
+        accessKey: invoice?.claveAcceso,
+        status: currentStatus, 
+        time: authDate || undefined, 
+        observations
+      });
+    } finally { setLoadingAction(null); }
+  };
+
   const handleSendEmail = async () => {
     if (!clientData.email) return toast({ title: "Email requerido", variant: "destructive" });
+    await handleSave(currentStatus);
     setLoadingAction('mail');
     try {
       const base64 = getBillingPDFBase64({
@@ -531,6 +564,9 @@ export default function EditInvoicePage() {
             </Button>
             <Button variant="outline" onClick={() => { if(authorizedXml) downloadXML(authorizedXml, `Factura_${invoice?.invoiceNumber}.xml`) }} disabled={loadingAction !== null || !isAuthorized}>
               {loadingAction === 'xml' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Code className="mr-2 h-4 w-4" />} XML
+            </Button>
+            <Button variant="outline" onClick={handlePrintTicket} disabled={loadingAction !== null || isAnnulled}>
+              {loadingAction === 'ticket' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Printer className="mr-2 h-4 w-4" />} Ticket
             </Button>
             <Button variant="outline" onClick={handleDownloadRIDE} disabled={loadingAction !== null}>
               {loadingAction === 'pdf' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <FileDown className="mr-2 h-4 w-4" />} RIDE

@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { 
   ArrowLeft, Save, Plus, Trash2, Loader2, Calendar as CalendarIcon, 
   Mail, FileDown, Hash, UserCheck, Phone, Search, MapPin, Info,
-  AlertTriangle, FileWarning, DollarSign
+  AlertTriangle, FileWarning, DollarSign, Printer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +34,7 @@ import { useFirestore, useDoc, useCollection } from "@/firebase";
 import { doc, updateDoc, serverTimestamp, collection } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { sendBillingEmail } from "@/app/actions/email-actions";
-import { generateBillingPDF, getBillingPDFBase64 } from "@/lib/pdf-service";
+import { generateBillingPDF, getBillingPDFBase64, generateThermalPDF } from "@/lib/pdf-service";
 
 const PAYMENT_METHODS = [
   { code: "01", label: "SIN UTILIZACIÓN DEL SISTEMA FINANCIERO" },
@@ -61,7 +61,7 @@ export default function EditProformaPage() {
 
   const [date, setDate] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [loadingAction, setLoadingAction] = useState<'save' | 'pdf' | 'mail' | null>(null);
+  const [loadingAction, setLoadingAction] = useState<'save' | 'pdf' | 'mail' | 'ticket' | null>(null);
   const [showExitModal, setShowExitModal] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [showEmptyDataModal, setShowEmptyDataModal] = useState(false);
@@ -213,6 +213,26 @@ export default function EditProformaPage() {
     } finally { setLoadingAction(null); }
   };
 
+  const handlePrintTicket = () => {
+    setLoadingAction('ticket');
+    try {
+      generateThermalPDF({
+        title: "Proforma",
+        client: clientData,
+        items: items.filter(i => i.description.trim() !== ""),
+        subtotal: subtotalBase,
+        iva: ivaCalculated,
+        total: totalWithIVA,
+        deposit,
+        balance,
+        date: format(date, "dd/MM/yyyy"),
+        docNumber: proformaNumber,
+        observations
+      });
+      toast({ title: "Ticket Generado" });
+    } finally { setLoadingAction(null); }
+  };
+
   const handleSendEmail = async () => {
     if (!clientData.email) return toast({ title: "Email requerido", variant: "destructive" });
     setLoadingAction('mail');
@@ -267,6 +287,9 @@ export default function EditProformaPage() {
           </Button>
           <Button variant="outline" onClick={handleGeneratePDF} disabled={loadingAction !== null}>
             {loadingAction === 'pdf' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <FileDown className="mr-2 h-4 w-4" />} PDF
+          </Button>
+          <Button variant="outline" onClick={handlePrintTicket} disabled={loadingAction !== null}>
+            {loadingAction === 'ticket' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Printer className="mr-2 h-4 w-4" />} Ticket
           </Button>
           <Button onClick={() => handleSave()} disabled={loadingAction !== null} className="bg-primary">
             {loadingAction === 'save' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />} Guardar

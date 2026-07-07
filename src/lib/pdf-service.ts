@@ -347,6 +347,190 @@ export function getBillingPDFBase64(data: PDFData): string {
   return doc.output('datauristring').split(',')[1];
 }
 
+function createTicketPDFDoc(data: PDFData) {
+  // calculate height
+  const itemsHeight = data.items.reduce((acc, item) => {
+    // est 4mm per line, wrap after 40 chars
+    const textLines = Math.ceil(item.description.length / 40) || 1;
+    return acc + (textLines * 4) + 2;
+  }, 0);
+  
+  const height = 140 + itemsHeight + (data.observations ? 20 : 0) + (data.accessKey ? 20 : 0);
+  
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: [80, height]
+  });
+  
+  const displayNum = data.docNumber || "001-100-XXXXXXXXX";
+  const emitter = data.emitter || {
+    name: EMITTER_INFO.name,
+    ruc: EMITTER_INFO.ruc,
+    address: EMITTER_INFO.address,
+    phones: EMITTER_INFO.phones,
+    email: EMITTER_INFO.email
+  };
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('AMEC', 40, 10, { align: 'center' });
+  
+  doc.setFontSize(9);
+  doc.text(emitter.name, 40, 15, { align: 'center' });
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text(`RUC: ${emitter.ruc}`, 40, 20, { align: 'center' });
+  const addrLines = doc.splitTextToSize(emitter.address, 70);
+  doc.text(addrLines, 40, 25, { align: 'center' });
+  const addrHeight = addrLines.length * 4;
+  
+  doc.text(`Telf: ${emitter.phones || emitter.phone || ""}`, 40, 25 + addrHeight, { align: 'center' });
+  
+  let y = 28 + addrHeight;
+  
+  doc.setLineWidth(0.3);
+  doc.setLineDash([1, 1], 0);
+  doc.line(5, y, 75, y);
+  doc.setLineDash([], 0);
+  
+  y += 6;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text(data.title.toUpperCase(), 40, y, { align: 'center' });
+  
+  y += 5;
+  doc.setFontSize(9);
+  doc.text(`No: ${displayNum}`, 40, y, { align: 'center' });
+  
+  y += 7;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text(`Fecha: ${data.date}`, 5, y);
+  y += 5;
+  doc.text(`Cliente: ${data.client.name}`, 5, y, { maxWidth: 70 });
+  y += 5;
+  doc.text(`RUC/CI: ${data.client.ruc}`, 5, y);
+  y += 5;
+  
+  doc.setLineDash([1, 1], 0);
+  doc.line(5, y, 75, y);
+  doc.setLineDash([], 0);
+  y += 5;
+  
+  doc.setFont('helvetica', 'bold');
+  doc.text('CANT', 5, y);
+  doc.text('DESCRIPCION', 18, y);
+  doc.text('TOTAL', 75, y, { align: 'right' });
+  y += 2;
+  
+  doc.setLineDash([1, 1], 0);
+  doc.line(5, y, 75, y);
+  doc.setLineDash([], 0);
+  y += 5;
+  
+  doc.setFont('helvetica', 'normal');
+  data.items.forEach((item) => {
+    const qty = safe(item.quantity);
+    const total = safe(item.quantity * item.unitPrice);
+    
+    doc.text(qty.toString(), 5, y);
+    doc.text(`$${total.toFixed(2)}`, 75, y, { align: 'right' });
+    
+    // adjust y based on text length of description
+    const textLines = doc.splitTextToSize(item.description, 40);
+    doc.text(textLines, 18, y);
+    y += (textLines.length * 4) + 2;
+  });
+  
+  doc.setLineDash([1, 1], 0);
+  doc.line(5, y, 75, y);
+  doc.setLineDash([], 0);
+  y += 6;
+  
+  doc.setFont('helvetica', 'normal');
+  doc.text('SUBTOTAL:', 35, y);
+  doc.text(`$${safe(data.subtotal !== undefined ? data.subtotal : data.total).toFixed(2)}`, 75, y, { align: 'right' });
+  y += 5;
+  
+  const ivaVal = data.iva15 !== undefined ? data.iva15 : 0;
+  if (ivaVal > 0) {
+    doc.text('IVA 15%:', 35, y);
+  } else {
+    doc.text('IVA 0%:', 35, y);
+  }
+  doc.text(`$${safe(ivaVal).toFixed(2)}`, 75, y, { align: 'right' });
+  y += 6;
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('TOTAL:', 35, y);
+  doc.text(`$${safe(data.total).toFixed(2)}`, 75, y, { align: 'right' });
+  y += 6;
+  
+  if (safe(data.deposit) > 0) {
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text('ABONADO:', 35, y);
+    doc.text(`$${safe(data.deposit).toFixed(2)}`, 75, y, { align: 'right' });
+    y += 5;
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('SALDO:', 35, y);
+    doc.text(`$${safe(data.balance).toFixed(2)}`, 75, y, { align: 'right' });
+    y += 6;
+  }
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  const payDesc = PAYMENT_MAP[data.client.paymentMethod || "01"] || "EFECTIVO";
+  const payLines = doc.splitTextToSize(`Forma de pago: ${payDesc}`, 70);
+  doc.text(payLines, 40, y, { align: 'center' });
+  y += payLines.length * 4 + 2;
+  
+  if (data.accessKey) {
+    doc.setFontSize(6);
+    doc.text('CLAVE DE ACCESO / AUTORIZACION:', 40, y, { align: 'center' });
+    y += 4;
+    doc.text(data.accessKey, 40, y, { align: 'center', maxWidth: 75 });
+    
+    // Add Barcode if available
+    if (typeof document !== 'undefined') {
+      try {
+        const canvas = document.createElement('canvas');
+        JsBarcode(canvas, data.accessKey, { format: "CODE128", displayValue: false, height: 30, width: 1, margin: 0 });
+        const barcodeData = canvas.toDataURL("image/png");
+        y += 2;
+        doc.addImage(barcodeData, 'PNG', 5, y, 70, 10);
+        y += 12;
+      } catch (e) {}
+    } else {
+        y += 8;
+    }
+  }
+  
+  if (data.observations) {
+    doc.setFontSize(7);
+    const obsLines = doc.splitTextToSize(`Notas: ${data.observations}`, 70);
+    doc.text(obsLines, 40, y, { align: 'center' });
+    y += obsLines.length * 4 + 2;
+  }
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('GRACIAS POR SU COMPRA', 40, y, { align: 'center' });
+  
+  return doc;
+}
+
+export function generateThermalPDF(data: PDFData) {
+  if (typeof window === 'undefined') return;
+  const doc = createTicketPDFDoc(data);
+  doc.autoPrint();
+  window.open(doc.output('bloburl'), '_blank');
+}
+
 export function generateMonthlyReportPDF(data: ReportData) {
   if (typeof window === 'undefined') return;
   const doc = new jsPDF();

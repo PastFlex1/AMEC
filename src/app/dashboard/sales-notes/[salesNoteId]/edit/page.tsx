@@ -18,7 +18,8 @@ import {
   Info,
   Phone,
   MapPin,
-  FileWarning
+  FileWarning,
+  Printer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,7 +45,7 @@ import { useFirestore, useCollection, useDoc } from "@/firebase";
 import { collection, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { generateBillingPDF, getBillingPDFBase64 } from "@/lib/pdf-service";
+import { generateBillingPDF, getBillingPDFBase64, generateThermalPDF } from "@/lib/pdf-service";
 import { sendBillingEmail } from "@/app/actions/email-actions";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -71,7 +72,7 @@ export default function EditSalesNotePage() {
 
   const [date, setDate] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [loadingAction, setLoadingAction] = useState<'save' | 'pdf' | 'mail' | null>(null);
+  const [loadingAction, setLoadingAction] = useState<'save' | 'pdf' | 'mail' | 'ticket' | null>(null);
   const [isConsumidorFinal, setIsConsumidorFinal] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
@@ -186,6 +187,24 @@ export default function EditSalesNotePage() {
     } finally { setLoadingAction(null); }
   };
 
+  const handlePrintTicket = () => {
+    setLoadingAction('ticket');
+    try {
+      generateThermalPDF({
+        title: "Nota de Venta",
+        client: clientData,
+        items: items.filter(i => i.description.trim() !== ""),
+        subtotal: subtotalBase,
+        iva: ivaCalculated,
+        total: totalWithIVA,
+        date: format(date, "dd/MM/yyyy"),
+        docNumber: noteNumber,
+        observations
+      });
+      toast({ title: "Ticket Generado" });
+    } finally { setLoadingAction(null); }
+  };
+
   const handleSendEmail = async () => {
     if (!clientData.email) return toast({ title: "Email requerido", variant: "destructive" });
     setLoadingAction('mail');
@@ -262,6 +281,9 @@ export default function EditSalesNotePage() {
           </Button>
           <Button variant="outline" onClick={handleGeneratePDF} disabled={loadingAction !== null}>
             {loadingAction === 'pdf' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <FileDown className="mr-2 h-4 w-4" />} PDF
+          </Button>
+          <Button variant="outline" onClick={handlePrintTicket} disabled={loadingAction !== null}>
+            {loadingAction === 'ticket' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Printer className="mr-2 h-4 w-4" />} Ticket
           </Button>
           <Button onClick={() => handleSave()} className="bg-[#2988a3] hover:bg-[#1f6a80]">
             {loadingAction === 'save' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />} Guardar
