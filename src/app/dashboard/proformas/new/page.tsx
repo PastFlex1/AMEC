@@ -366,7 +366,13 @@ export default function NewProformaPage() {
                     onChange={(e) => {
                       const val = e.target.value.replace(/\D/g, '');
                       setClientData({...clientData, ruc: val});
-                      if (val.length === 10) fetchCedulaData(val, (name) => setClientData(prev => ({...prev, name})));
+                      if (val.length === 10) fetchCedulaData(val, (data) => setClientData(prev => ({
+                        ...prev, 
+                        name: data.name || prev.name,
+                        address: data.address || prev.address,
+                        email: data.email || prev.email,
+                        phone: data.phone || prev.phone
+                      })));
                     }} 
                     className="bg-slate-50 h-11" 
                   />

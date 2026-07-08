@@ -195,7 +195,13 @@ export default function CustomersPage() {
                       const val = e.target.value.replace(/\D/g, '');
                       setNewCustomer({...newCustomer, ruc: val});
                       if (val.length === 10) {
-                        fetchCedulaData(val);
+                        fetchCedulaData(val, (data) => setNewCustomer(prev => ({
+                          ...prev, 
+                          name: data.name || prev.name, 
+                          address: data.address || prev.address, 
+                          email: data.email || prev.email, 
+                          phone: data.phone || prev.phone 
+                        })));
                       }
                     }}
                     className="rounded-xl h-11"
