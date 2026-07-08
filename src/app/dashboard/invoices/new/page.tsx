@@ -64,6 +64,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DEFAULT_TAX_CONFIG, TaxConfig } from "@/lib/config-helper";
+import { useCedulaSearch } from "@/hooks/useCedulaSearch";
 
 const PAYMENT_METHODS = [
   { code: "01", label: "SIN UTILIZACIÓN DEL SISTEMA FINANCIERO" },
@@ -78,6 +79,7 @@ const PAYMENT_METHODS = [
 export default function NewInvoicePage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { isSearchingCedula, fetchCedulaData } = useCedulaSearch();
   const db = useFirestore();
   const [taxConfig, setTaxConfig] = useState<TaxConfig>(DEFAULT_TAX_CONFIG);
   const [date, setDate] = useState<Date>(new Date());
@@ -668,7 +670,11 @@ export default function NewInvoicePage() {
                         placeholder="Ej: 1725389454001" 
                         value={clientData.ruc} 
                         maxLength={13} 
-                        onChange={(e) => setClientData({...clientData, ruc: e.target.value.replace(/\D/g, '')})} 
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          setClientData({...clientData, ruc: val});
+                          if (val.length === 10) fetchCedulaData(val, (name) => setClientData(prev => ({...prev, name})));
+                        }} 
                         className="bg-slate-50 h-11" 
                       />
                       <Button 
@@ -690,7 +696,10 @@ export default function NewInvoicePage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label className="font-bold text-slate-700 uppercase text-[10px]">Razón Social:</Label>
+                    <Label className="font-bold text-slate-700 uppercase text-[10px] flex items-center gap-2">
+                      Razón Social:
+                      {isSearchingCedula && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+                    </Label>
                     <Input placeholder="Nombre completo" value={clientData.name} onChange={(e) => setClientData({...clientData, name: e.target.value})} className="bg-slate-50 h-11" />
                   </div>
                   <div className="space-y-2">

@@ -65,6 +65,38 @@ export default function CustomersPage() {
     status: "Activo"
   });
 
+  const [isSearchingCedula, setIsSearchingCedula] = useState(false);
+
+  const fetchCedulaData = async (cedula: string) => {
+    if (cedula.length !== 10) return;
+    setIsSearchingCedula(true);
+    try {
+      const proxyUrl = 'https://infoplacas.herokuapp.com/';
+      const targetUrl = 'https://si.secap.gob.ec/sisecap/logeo_web/json/busca_persona_registro_civil.php';
+      
+      const response = await fetch(proxyUrl + targetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ documento: cedula, tipo: '1' })
+      });
+
+      if (response.ok) {
+        const text = await response.text();
+        if (text) {
+          const data = JSON.parse(text);
+          if (data && data.nombreCompleto) {
+            setNewCustomer(prev => ({ ...prev, name: data.nombreCompleto }));
+            toast({ title: "Datos del Registro Civil", description: "Nombre autocompletado con éxito." });
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error al buscar cédula:", error);
+    } finally {
+      setIsSearchingCedula(false);
+    }
+  };
+
   const customersRef = useMemo(() => (db ? collection(db, "customers") : null), [db]);
   const { data: customers, loading } = useCollection(customersRef);
 
@@ -159,7 +191,13 @@ export default function CustomersPage() {
                     placeholder="10 o 13 dígitos" 
                     maxLength={13}
                     value={newCustomer.ruc}
-                    onChange={(e) => setNewCustomer({...newCustomer, ruc: e.target.value.replace(/\D/g, '')})}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setNewCustomer({...newCustomer, ruc: val});
+                      if (val.length === 10) {
+                        fetchCedulaData(val);
+                      }
+                    }}
                     className="rounded-xl h-11"
                     required
                   />
@@ -173,7 +211,10 @@ export default function CustomersPage() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase text-muted-foreground">Razón Social / Nombre</Label>
+                  <Label className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
+                    Razón Social / Nombre
+                    {isSearchingCedula && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+                  </Label>
                   <Input 
                     placeholder="Nombre completo" 
                     value={newCustomer.name}

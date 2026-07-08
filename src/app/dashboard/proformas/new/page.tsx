@@ -45,6 +45,7 @@ import { useFirestore, useCollection } from "@/firebase";
 import { collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot, updateDoc, doc, where, getDocs, increment } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useCedulaSearch } from "@/hooks/useCedulaSearch";
 import { generateBillingPDF, getBillingPDFBase64, generateThermalPDF } from "@/lib/pdf-service";
 import { sendBillingEmail } from "@/app/actions/email-actions";
 import { format } from "date-fns";
@@ -63,6 +64,7 @@ const PAYMENT_METHODS = [
 export default function NewProformaPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { isSearchingCedula, fetchCedulaData } = useCedulaSearch();
   const db = useFirestore();
   const [date, setDate] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -357,13 +359,26 @@ export default function NewProformaPage() {
               <div className="space-y-2">
                 <Label className="font-bold text-slate-700 uppercase text-[10px]">R.U.C / C.I.</Label>
                 <div className="flex gap-2">
-                  <Input placeholder="Identificación" value={clientData.ruc} maxLength={13} onChange={(e) => setClientData({...clientData, ruc: e.target.value.replace(/\D/g, '')})} className="bg-slate-50 h-11" />
+                  <Input 
+                    placeholder="Identificación" 
+                    value={clientData.ruc} 
+                    maxLength={13} 
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setClientData({...clientData, ruc: val});
+                      if (val.length === 10) fetchCedulaData(val, (name) => setClientData(prev => ({...prev, name})));
+                    }} 
+                    className="bg-slate-50 h-11" 
+                  />
                   <Button variant={isConsumidorFinal ? "default" : "outline"} className={cn("h-11 px-3 text-[10px] font-black uppercase", isConsumidorFinal && "bg-orange-500 text-white")} onClick={handleConsumidorFinal}><UserCheck className="h-3 w-3 mr-1" /> C. Final</Button>
                 </div>
                 {docInfo.text && <p className={cn("text-[10px] font-black uppercase pl-1", docInfo.isError ? "text-destructive" : "text-primary")}>{docInfo.text}</p>}
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-slate-700 uppercase text-[10px]">Nombre:</Label>
+                <Label className="font-bold text-slate-700 uppercase text-[10px] flex items-center gap-2">
+                  Nombre:
+                  {isSearchingCedula && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+                </Label>
                 <Input placeholder="Nombre completo" value={clientData.name} onChange={(e) => setClientData({...clientData, name: e.target.value})} className="bg-slate-50 h-11" disabled={isConsumidorFinal} />
               </div>
               <div className="space-y-2"><Label className="font-bold text-slate-700 uppercase text-[10px]">Email:</Label><Input type="email" value={clientData.email} onChange={(e) => setClientData({...clientData, email: e.target.value})} className="bg-slate-50 h-11" /></div>
