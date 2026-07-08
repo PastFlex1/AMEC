@@ -49,6 +49,7 @@ import { useToast } from "@/hooks/use-toast";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 import { cn } from "@/lib/utils";
+import { useCedulaSearch } from "@/hooks/useCedulaSearch";
 
 export default function CustomersPage() {
   const { toast } = useToast();
@@ -65,37 +66,7 @@ export default function CustomersPage() {
     status: "Activo"
   });
 
-  const [isSearchingCedula, setIsSearchingCedula] = useState(false);
-
-  const fetchCedulaData = async (cedula: string) => {
-    if (cedula.length !== 10) return;
-    setIsSearchingCedula(true);
-    try {
-      const proxyUrl = 'https://infoplacas.herokuapp.com/';
-      const targetUrl = 'https://si.secap.gob.ec/sisecap/logeo_web/json/busca_persona_registro_civil.php';
-      
-      const response = await fetch(proxyUrl + targetUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ documento: cedula, tipo: '1' })
-      });
-
-      if (response.ok) {
-        const text = await response.text();
-        if (text) {
-          const data = JSON.parse(text);
-          if (data && data.nombreCompleto) {
-            setNewCustomer(prev => ({ ...prev, name: data.nombreCompleto }));
-            toast({ title: "Datos del Registro Civil", description: "Nombre autocompletado con éxito." });
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error al buscar cédula:", error);
-    } finally {
-      setIsSearchingCedula(false);
-    }
-  };
+  const { isSearchingCedula, fetchCedulaData } = useCedulaSearch();
 
   const customersRef = useMemo(() => (db ? collection(db, "customers") : null), [db]);
   const { data: customers, loading } = useCollection(customersRef);
