@@ -615,3 +615,132 @@ export function generateMonthlyReportPDF(data: ReportData) {
   doc.text(`Reporte de ventas reales (Excluye Proformas). Generado el ${new Date().toLocaleString()}`, 105, finalY, { align: 'center' });
   doc.save(`Reporte_Ventas_AMEC_${data.monthName}_${data.year}.pdf`);
 }
+
+export interface WeeklyReportData {
+  weekStart: string;
+  weekEnd: string;
+  stats: {
+    concretadasCount: number;
+    concretadasTotal: number;
+    abonadasCount: number;
+    abonadasTotal: number;
+    abonadasCobrado: number;
+    pendientesCount: number;
+    pendientesTotal: number;
+    totalVentas: number;
+    totalCount: number;
+    totalSaldoPendiente: number;
+  };
+  items: any[];
+}
+
+export function generateWeeklyReportPDF(data: WeeklyReportData) {
+  if (typeof window === 'undefined') return;
+  const doc = new jsPDF() as any;
+  const primaryColor: [number, number, number] = [79, 70, 229]; 
+  const concretadaColor: [number, number, number] = [16, 185, 129];
+  const abonadaColor: [number, number, number] = [245, 158, 11];
+  const pendienteColor: [number, number, number] = [225, 29, 72];
+
+  // Header
+  doc.setFillColor(...primaryColor);
+  doc.rect(0, 0, 210, 15, 'F');
+  try { doc.addImage('/Amec.png', 'PNG', 15, 20, 25, 25); } catch (e) {}
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(22); doc.setTextColor(...primaryColor);
+  doc.text('REPORTE EJECUTIVO SEMANAL', 195, 35, { align: 'right' });
+  doc.setFontSize(12); doc.setTextColor(100, 100, 100);
+  doc.text(`Semana: ${data.weekStart} - ${data.weekEnd}`, 195, 42, { align: 'right' });
+
+  // Summary Cards
+  const drawStatCard = (x: number, y: number, w: number, label: string, value: string, countStr: string, valueColor: [number, number, number]) => {
+    doc.setDrawColor(230, 230, 230); doc.setFillColor(255, 255, 255);
+    doc.roundedRect(x, y, w, 28, 2, 2, 'FD');
+    doc.setFillColor(...valueColor); doc.rect(x, y, 2, 28, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(120, 120, 120);
+    doc.text(label, x + 4, y + 8);
+    doc.setFontSize(10); doc.setTextColor(...valueColor);
+    doc.text(value, x + 4, y + 16);
+    doc.setFontSize(6); doc.setTextColor(150, 150, 150); doc.setFont('helvetica', 'normal');
+    doc.text(countStr, x + 4, y + 22);
+  };
+
+  const cardW = 58;
+  drawStatCard(15, 60, cardW, 'VENTAS CONCRETADAS', `$${safe(data.stats.concretadasTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, `${data.stats.concretadasCount} docs pagados`, concretadaColor);
+  drawStatCard(15 + cardW + 3, 60, cardW, 'ABONOS RECAUDADOS', `$${safe(data.stats.abonadasCobrado).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, `${data.stats.abonadasCount} docs con abono`, abonadaColor);
+  drawStatCard(15 + (cardW + 3) * 2, 60, cardW, 'SALDO PENDIENTE', `$${safe(data.stats.totalSaldoPendiente).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, `Por cobrar en total`, pendienteColor);
+
+  // Table Details
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(0, 0, 0);
+  doc.text('DETALLE DE DOCUMENTOS EMITIDOS', 15, 105);
+
+  const tableRows = data.items.map(doc => {
+    let stat = (doc.status || "").toLowerCase();
+    let bal = Number(doc.balance || 0);
+    let dep = Number(doc.deposit || 0);
+    
+    let statusText = "PENDIENTE";
+    if (doc.type === 'Proforma') {
+      statusText = "COTIZACIÓN";
+    } else if (stat === 'pagado' || stat === 'concretada' || stat === 'cancelado' || bal <= 0) {
+      statusText = "AL DÍA (PAGADO)";
+    } else if (stat === 'abonado' || (dep > 0 && bal > 0)) {
+      statusText = "ABONADA";
+    }
+
+    const dateStr = doc.date?.toDate 
+      ? new Date(doc.date.toDate()).toLocaleDateString()
+      : (typeof doc.date === 'string' ? doc.date.substring(0, 10) : "");
+
+    return [
+      doc.type === 'Factura' ? 'Factura' : (doc.type === 'Proforma' ? 'Proforma' : 'Nota de Venta'),
+      doc.noteNumber || doc.docNumber || 'S/N',
+      doc.clientData?.name || doc.client?.name || 'Consumidor Final',
+      dateStr,
+      statusText,
+      `$${safe(doc.deposit).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+      `$${safe(doc.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+      `$${safe(doc.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+    ];
+  });
+
+  doc.autoTable({
+    startY: 112,
+    head: [['Tipo', 'Número', 'Cliente', 'Fecha', 'Estado', 'Abono', 'Saldo', 'Total']],
+    body: tableRows,
+    theme: 'striped',
+    headStyles: { fillColor: primaryColor, textColor: 255, fontSize: 7, fontStyle: 'bold', halign: 'center' },
+    bodyStyles: { fontSize: 7, halign: 'center' },
+    columnStyles: { 
+      2: { halign: 'left', width: 45 },
+      4: { fontStyle: 'bold' },
+      5: { halign: 'right' },
+      6: { halign: 'right' },
+      7: { halign: 'right', fontStyle: 'bold' }
+    },
+    willDrawCell: function(data: any) {
+      if (data.section === 'body' && data.column.index === 4) {
+        if (data.cell.raw === 'AL DÍA (PAGADO)') doc.setTextColor(...concretadaColor);
+        else if (data.cell.raw === 'ABONADA') doc.setTextColor(...abonadaColor);
+        else if (data.cell.raw === 'PENDIENTE') doc.setTextColor(...pendienteColor);
+        else if (data.cell.raw === 'COTIZACIÓN') doc.setTextColor(150, 150, 150);
+      }
+    }
+  });
+
+  const finalY = (doc as any).lastAutoTable.finalY + 15;
+  
+  // Total summary footer
+  doc.setDrawColor(200, 200, 200); doc.setFillColor(250, 250, 250);
+  doc.roundedRect(125, finalY, 70, 16, 2, 2, 'FD');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0, 0, 0);
+  doc.text('TOTAL VENTAS:', 130, finalY + 6.5);
+  doc.text(`$${safe(data.stats.totalVentas).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 190, finalY + 6.5, { align: 'right' });
+  doc.setTextColor(225, 29, 72); // Rojo para saldo pendiente
+  doc.text('SALDO PENDIENTE:', 130, finalY + 12.5);
+  doc.text(`$${safe(data.stats.totalSaldoPendiente).toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 190, finalY + 12.5, { align: 'right' });
+
+  doc.setFontSize(7); doc.setTextColor(180, 180, 180);
+  doc.text(`Reporte de estado de cartera (Semanal). Generado el ${new Date().toLocaleString()}`, 105, finalY + 25, { align: 'center' });
+  
+  doc.save(`Reporte_Ventas_Semanal_AMEC.pdf`);
+}

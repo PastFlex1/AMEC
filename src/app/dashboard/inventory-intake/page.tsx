@@ -38,6 +38,8 @@ export default function InventoryIntakePage() {
   const [productSearch, setProductSearch] = useState("");
   const [isProductPopoverOpen, setIsProductPopoverOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
 
   useEffect(() => {
     const savedRole = localStorage.getItem('amec_user_role');
@@ -72,6 +74,14 @@ export default function InventoryIntakePage() {
       (p.name || "").toLowerCase().includes(productSearch.toLowerCase())
     ).sort((a: any, b: any) => (a.name || "").localeCompare(b.name || ""));
   }, [products, productSearch]);
+
+  const paginatedIntakes = useMemo(() => {
+    if (!intakes) return [];
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return intakes.slice(startIndex, startIndex + itemsPerPage);
+  }, [intakes, currentPage]);
+
+  const totalPages = Math.ceil((intakes?.length || 0) / itemsPerPage);
 
   const handleSaveIntake = async () => {
     if (!db || !selectedProduct || !quantity || quantity <= 0) {
@@ -283,7 +293,7 @@ export default function InventoryIntakePage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    intakes.map((data: any) => {
+                    paginatedIntakes.map((data: any) => {
                       return (
                         <TableRow key={data.id} className="hover:bg-slate-50 transition-colors">
                           <TableCell className="text-xs font-medium text-slate-500">
@@ -312,6 +322,33 @@ export default function InventoryIntakePage() {
                 </TableBody>
               </Table>
             </CardContent>
+            {totalPages > 1 && (
+              <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50 mt-auto">
+                <span className="text-sm text-slate-500 font-medium">
+                  Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, intakes?.length || 0)} de {intakes?.length} registros
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="h-8 rounded-lg font-bold"
+                  >
+                    Anterior
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="h-8 rounded-lg font-bold"
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         </div>
 

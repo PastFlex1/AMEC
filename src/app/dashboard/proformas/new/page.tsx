@@ -460,7 +460,7 @@ export default function NewProformaPage() {
                   <Input type="number" value={item.quantity} onChange={(e) => {
                     let val = parseFloat(e.target.value) || 0;
                     if (item.maxStock !== null && val > item.maxStock) {
-                      toast({ title: "Stock Insuficiente", description: `Solo hay ${item.maxStock} unidades en inventario.`, variant: "destructive" });
+                      toast({ title: "Stock Insuficiente", description: `Solo hay ${item.maxStock} unidades. Llene el stock desde Ingreso de Mercadería.`, variant: "destructive" });
                       val = item.maxStock;
                     }
                     setItems(items.map(i => i.id === item.id ? { ...i, quantity: val } : i));

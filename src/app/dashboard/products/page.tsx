@@ -186,7 +186,14 @@ export default function ProductsPage() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-gray-900">Catálogo de Productos</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-black tracking-tight text-gray-900">Catálogo de Productos</h1>
+            {products && (
+              <span className="bg-primary/10 text-primary font-bold text-xs px-2.5 py-1 rounded-full border border-primary/20">
+                {products.length} {products.length === 1 ? 'producto' : 'productos'}
+              </span>
+            )}
+          </div>
           <p className="text-muted-foreground font-medium">Gestión de nombres, precios y tarifas de IVA del catálogo.</p>
         </div>
 

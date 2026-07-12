@@ -122,6 +122,11 @@ export async function syncDailyCashClosing(db: any, sellerName: string, dateStri
       });
     });
 
+    if (documents.length === 0) {
+      console.log(`[Caja] Sin documentos para ${sellerName} el ${dateString}, se omite el cierre.`);
+      return;
+    }
+
     // Guardar o actualizar el documento correspondiente a este día y vendedor
     const closingDocId = `${sellerName}_${dateString}`;
     await setDoc(doc(db, "cashClosings", closingDocId), {

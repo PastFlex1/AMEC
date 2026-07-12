@@ -50,6 +50,7 @@ import { generateBillingPDF, getBillingPDFBase64, generateThermalPDF } from "@/l
 import { sendBillingEmail } from "@/app/actions/email-actions";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { useCedulaSearch } from "@/hooks/useCedulaSearch";
 
 const PAYMENT_METHODS = [
   { code: "01", label: "SIN UTILIZACIÓN DEL SISTEMA FINANCIERO" },
@@ -65,6 +66,7 @@ export default function NewSalesNotePage() {
   const router = useRouter();
   const { toast } = useToast();
   const db = useFirestore();
+  const { isSearchingCedula, fetchCedulaData } = useCedulaSearch();
   const [date, setDate] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [loadingAction, setLoadingAction] = useState<'save' | 'pdf' | 'mail' | 'lookup' | 'save_customer' | 'ticket' | null>(null);
@@ -395,13 +397,32 @@ export default function NewSalesNotePage() {
               <div className="space-y-2">
                 <Label className="font-bold text-slate-700 uppercase text-[10px]">R.U.C / C.I.</Label>
                 <div className="flex gap-2">
-                  <Input placeholder="Identificación" value={clientData.ruc} maxLength={13} onChange={(e) => setClientData({...clientData, ruc: e.target.value.replace(/\D/g, '')})} className="bg-slate-50 h-11" />
+                  <Input 
+                    placeholder="Identificación" 
+                    value={clientData.ruc} 
+                    maxLength={13} 
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setClientData({...clientData, ruc: val});
+                      if (val.length === 10) fetchCedulaData(val, (data) => setClientData(prev => ({
+                        ...prev, 
+                        name: data.name || prev.name,
+                        address: data.address || prev.address,
+                        email: data.email || prev.email,
+                        phone: data.phone || prev.phone
+                      })));
+                    }}
+                    className="bg-slate-50 h-11" 
+                  />
                   <Button variant={isConsumidorFinal ? "default" : "outline"} className={cn("h-11 px-3 text-[10px] font-black uppercase", isConsumidorFinal && "bg-[#2988a3] text-white")} onClick={handleConsumidorFinal}><UserCheck className="h-3 w-3 mr-1" /> C. Final</Button>
                 </div>
                 {docInfo.text && <p className={cn("text-[10px] font-black uppercase pl-1", docInfo.isError ? "text-destructive" : "text-[#2988a3]")}>{docInfo.text}</p>}
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-slate-700 uppercase text-[10px]">Nombre:</Label>
+                <Label className="font-bold text-slate-700 uppercase text-[10px] flex items-center gap-2">
+                  Nombre:
+                  {isSearchingCedula && <Loader2 className="h-3 w-3 animate-spin text-[#2988a3]" />}
+                </Label>
                 <Input placeholder="Nombre completo" value={clientData.name} onChange={(e) => setClientData({...clientData, name: e.target.value})} className="bg-slate-50 h-11" disabled={isConsumidorFinal} />
               </div>
               <div className="space-y-2">
@@ -474,12 +495,12 @@ export default function NewSalesNotePage() {
                           {filteredProducts.map((p: any) => (
                             <button key={p.id} className="w-full text-left px-4 py-3 hover:bg-slate-50 flex justify-between border-b items-center" onClick={() => { 
                               if (p.stock !== undefined && p.stock <= 0) {
-                                toast({ title: "Producto Agotado", description: `El producto ${p.name} no tiene stock disponible.`, variant: "destructive" });
+                                toast({ title: "Producto Agotado", description: `El producto ${p.name} está agotado. Llene el stock desde Ingreso de Mercadería o en el Inventario.`, variant: "destructive" });
                                 return;
                               }
                               const newQty = (p.stock !== undefined && item.quantity > p.stock) ? p.stock : item.quantity;
                               if (newQty < item.quantity) {
-                                 toast({ title: "Stock Insuficiente", description: `Se ajustó la cantidad a ${newQty} unidades.`, variant: "destructive" });
+                                 toast({ title: "Stock Insuficiente", description: `Se ajustó a ${newQty} unidades. Si necesita más, llene el stock desde Ingreso de Mercadería.`, variant: "destructive" });
                               }
                               setItems(items.map(i => i.id === item.id ? { ...i, description: p.name, unitPrice: p.price, productId: p.id, maxStock: p.stock !== undefined ? p.stock : null, quantity: newQty } : i)); 
                               setOpenPopoverId(null); 
@@ -500,7 +521,7 @@ export default function NewSalesNotePage() {
                     <Input type="number" value={item.quantity} onChange={(e) => {
                       let val = parseFloat(e.target.value) || 0;
                       if (item.maxStock !== null && val > item.maxStock) {
-                        toast({ title: "Stock Insuficiente", description: `Solo hay ${item.maxStock} unidades en inventario.`, variant: "destructive" });
+                        toast({ title: "Stock Insuficiente", description: `Solo hay ${item.maxStock} unidades. Llene el stock desde Ingreso de Mercadería.`, variant: "destructive" });
                         val = item.maxStock;
                       }
                       setItems(items.map(i => i.id === item.id ? { ...i, quantity: val } : i));

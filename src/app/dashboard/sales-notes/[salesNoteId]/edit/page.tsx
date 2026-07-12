@@ -49,6 +49,7 @@ import { generateBillingPDF, getBillingPDFBase64, generateThermalPDF } from "@/l
 import { sendBillingEmail } from "@/app/actions/email-actions";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { useCedulaSearch } from "@/hooks/useCedulaSearch";
 
 const PAYMENT_METHODS = [
   { code: "01", label: "SIN UTILIZACIÓN DEL SISTEMA FINANCIERO" },
@@ -66,6 +67,7 @@ export default function EditSalesNotePage() {
   const salesNoteId = params.salesNoteId as string;
   const { toast } = useToast();
   const db = useFirestore();
+  const { isSearchingCedula, fetchCedulaData } = useCedulaSearch();
 
   const noteRef = useMemo(() => (db ? doc(db, "salesNotes", salesNoteId) : null), [db, salesNoteId]);
   const { data: existingNote, loading: loadingDoc } = useDoc<any>(noteRef);
@@ -134,14 +136,14 @@ export default function EditSalesNotePage() {
 
   const handleSelectProduct = (itemId: string, product: any) => {
     if (product.stock !== undefined && product.stock <= 0) {
-      toast({ title: "Producto Agotado", description: `El producto ${product.name} no tiene stock disponible.`, variant: "destructive" });
+      toast({ title: "Producto Agotado", description: `El producto ${product.name} está agotado. Llene el stock desde Ingreso de Mercadería o en el Inventario.`, variant: "destructive" });
       return;
     }
     const currentItem = items.find(i => i.id === itemId);
     const currentQty = currentItem?.quantity || 1;
     const newQty = (product.stock !== undefined && currentQty > product.stock) ? product.stock : currentQty;
     if (newQty < currentQty) {
-       toast({ title: "Stock Insuficiente", description: `Se ajustó la cantidad a ${newQty} unidades.`, variant: "destructive" });
+       toast({ title: "Stock Insuficiente", description: `Se ajustó a ${newQty} unidades. Si necesita más, llene el stock desde Ingreso de Mercadería.`, variant: "destructive" });
     }
     setItems(items.map(item => item.id === itemId ? { ...item, description: product.name, unitPrice: product.price, productId: product.id, maxStock: product.stock !== undefined ? product.stock : null, quantity: newQty } : item));
     setProductSearch("");
@@ -299,13 +301,32 @@ export default function EditSalesNotePage() {
               <div className="space-y-2">
                 <Label className="font-bold text-slate-700 uppercase text-[10px]">R.U.C / C.I.</Label>
                 <div className="flex gap-2">
-                  <Input placeholder="Identificación" value={clientData.ruc} maxLength={13} onChange={(e) => setClientData({...clientData, ruc: e.target.value.replace(/\D/g, '')})} className="bg-slate-50 h-11" />
+                  <Input 
+                    placeholder="Identificación" 
+                    value={clientData.ruc} 
+                    maxLength={13} 
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setClientData({...clientData, ruc: val});
+                      if (val.length === 10) fetchCedulaData(val, (data) => setClientData(prev => ({
+                        ...prev, 
+                        name: data.name || prev.name,
+                        address: data.address || prev.address,
+                        email: data.email || prev.email,
+                        phone: data.phone || prev.phone
+                      })));
+                    }}
+                    className="bg-slate-50 h-11" 
+                  />
                   <Button variant={isConsumidorFinal ? "default" : "outline"} className={cn("h-11 px-3 text-[10px] font-black uppercase", isConsumidorFinal && "bg-[#2988a3] text-white")} onClick={handleConsumidorFinal}><UserCheck className="h-3 w-3 mr-1" /> C. Final</Button>
                 </div>
                 {docInfo.text && <p className={cn("text-[10px] font-black uppercase pl-1", docInfo.isError ? "text-destructive" : "text-[#2988a3]")}>{docInfo.text}</p>}
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-slate-700 uppercase text-[10px]">Nombre:</Label>
+                <Label className="font-bold text-slate-700 uppercase text-[10px] flex items-center gap-2">
+                  Nombre:
+                  {isSearchingCedula && <Loader2 className="h-3 w-3 animate-spin text-[#2988a3]" />}
+                </Label>
                 <Input placeholder="Nombre completo" value={clientData.name} onChange={(e) => setClientData({...clientData, name: e.target.value})} className="bg-slate-50 h-11" disabled={isConsumidorFinal} />
               </div>
               <div className="space-y-2">
@@ -393,7 +414,7 @@ export default function EditSalesNotePage() {
                     <Input type="number" value={item.quantity} onChange={(e) => {
                       let val = parseFloat(e.target.value) || 0;
                       if (item.maxStock !== null && val > item.maxStock) {
-                        toast({ title: "Stock Insuficiente", description: `Solo hay ${item.maxStock} unidades en inventario.`, variant: "destructive" });
+                        toast({ title: "Stock Insuficiente", description: `Solo hay ${item.maxStock} unidades. Llene el stock desde Ingreso de Mercadería.`, variant: "destructive" });
                         val = item.maxStock;
                       }
                       const newItems = [...items];

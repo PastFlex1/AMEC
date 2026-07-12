@@ -802,12 +802,12 @@ export default function NewInvoicePage() {
                               {filteredProducts.map((p: any) => (
                                 <button key={p.id} className="w-full text-left px-4 py-3 text-sm hover:bg-primary/5 flex items-center justify-between border-b last:border-0" onClick={() => { 
                                   if (p.stock !== undefined && p.stock <= 0) {
-                                    toast({ title: "Producto Agotado", description: `El producto ${p.name} no tiene stock disponible.`, variant: "destructive" });
+                                    toast({ title: "Producto Agotado", description: `El producto ${p.name} está agotado. Llene el stock desde Ingreso de Mercadería o en el Inventario.`, variant: "destructive" });
                                     return;
                                   }
                                   const newQty = (p.stock !== undefined && item.quantity > p.stock) ? p.stock : item.quantity;
                                   if (newQty < item.quantity) {
-                                     toast({ title: "Stock Insuficiente", description: `Se ajustó la cantidad a ${newQty} unidades.`, variant: "destructive" });
+                                     toast({ title: "Stock Insuficiente", description: `Se ajustó a ${newQty} unidades. Si necesita más, llene el stock desde Ingreso de Mercadería.`, variant: "destructive" });
                                   }
                                   setItems(items.map(i => i.id === item.id ? { ...i, description: p.name, unitPrice: p.price, productId: p.id, maxStock: p.stock !== undefined ? p.stock : null, quantity: newQty, ivaRate: p.ivaRate !== undefined ? p.ivaRate.toString() : null } : i)); 
                                   setOpenPopoverId(null); 
@@ -828,7 +828,7 @@ export default function NewInvoicePage() {
                         <Input type="number" value={item.quantity} onChange={(e) => {
                           let val = parseFloat(e.target.value) || 0;
                           if (item.maxStock !== null && val > item.maxStock) {
-                            toast({ title: "Stock Insuficiente", description: `Solo hay ${item.maxStock} unidades en inventario.`, variant: "destructive" });
+                            toast({ title: "Stock Insuficiente", description: `Solo hay ${item.maxStock} unidades. Llene el stock desde Ingreso de Mercadería.`, variant: "destructive" });
                             val = item.maxStock;
                           }
                           setItems(items.map(i => i.id === item.id ? { ...i, quantity: val } : i));
