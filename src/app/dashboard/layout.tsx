@@ -53,7 +53,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="h-screen w-full flex flex-col items-center justify-center bg-[#f8fafc] space-y-8 animate-in fade-in duration-700">
         <div className="relative h-40 w-40 drop-shadow-2xl bg-white rounded-[2rem] p-6 shadow-xl border border-slate-100">
           <Image 
-            src="/Amec.png" 
+            src="/Amec.jpeg" 
             alt="Logo AMEC" 
             fill 
             className="object-contain p-4 animate-pulse" 
@@ -77,11 +77,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <SidebarProvider>
       <Sidebar variant="sidebar" collapsible="icon" className="border-r-0 shadow-2xl transition-all duration-300">
-        <SidebarHeader className="space-y-6 px-6 py-8">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 relative shrink-0">
+        <SidebarHeader className="space-y-6 p-6 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:pt-4 py-8">
+          <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
+            <div className="h-10 w-10 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 relative shrink-0">
               <Image 
-                src="/Amec.png" 
+                src="/Amec.jpeg" 
                 alt="Logo AMEC" 
                 fill 
                 sizes="40px"

@@ -10,9 +10,9 @@ const nextConfig: NextConfig = {
   },
   outputFileTracingRoot: process.cwd(),
   experimental: {
-    allowedDevOrigins: ["http://127.0.0.1:3333", "http://127.0.0.1:3000", "http://localhost:3333", "http://localhost:3000"],
     serverActions: {
       bodySizeLimit: '20mb',
+      allowedOrigins: ["http://127.0.0.1:3333", "http://127.0.0.1:3000", "http://localhost:3333", "http://localhost:3000"],
     },
   },
   images: {

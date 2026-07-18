@@ -142,14 +142,14 @@ export function SidebarNav({ role, searchQuery = "" }: SidebarNavProps) {
                           asChild
                           isActive={isActive}
                           className={cn(
-                            "w-full transition-colors",
+                            "w-full transition-colors group-data-[collapsible=icon]:!size-10 group-data-[collapsible=icon]:!justify-center",
                             isActive 
                               ? "bg-primary/10 text-primary font-semibold" 
                               : "hover:bg-accent hover:text-accent-foreground"
                           )}
                         >
                           <Link href={item.href}>
-                            <item.icon className={cn("h-4 w-4", isActive ? "text-primary" : "text-muted-foreground")} />
+                            <item.icon className={cn("h-5 w-5 shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
                             <span>{item.title}</span>
                           </Link>
                         </SidebarMenuButton>

@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   title: 'AMEC Centro de Facturación',
   description: 'Solución de Facturación y CRM de Grado Empresarial',
   icons: {
-    icon: '/Amec.png',
+    icon: '/Amec.jpeg',
   },
 };
 

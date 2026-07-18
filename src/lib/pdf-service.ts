@@ -83,7 +83,7 @@ const EMITTER_INFO = {
   ruc: "1725389454001",
   address: "Av Jaime roldos oe2-128 y Francisco Sánchez",
   phones: "025158093 - 0992769292 - 0989411821",
-  email: "ap91.mor@gmail.com"
+  email: "amec.marcando.diferencia@hotmail.com"
 };
 
 const safe = (n: any) => Number(n || 0);
@@ -106,7 +106,7 @@ function createPDFDoc(data: PDFData) {
 
   if (isFactura) {
     const authNumber = data.accessKey || "0000000000000000000000000000000000000000000000000";
-    try { doc.addImage('/Amec.png', 'PNG', 15, 10, 35, 35); } catch (e) {}
+    try { doc.addImage('/Amec.jpeg', 'PNG', 15, 10, 35, 35); } catch (e) {}
     doc.setDrawColor(0);
     doc.setLineWidth(0.3); 
     doc.setTextColor(0);
@@ -259,7 +259,7 @@ function createPDFDoc(data: PDFData) {
     const primaryColor = data.color || (data.title === "Proforma" ? [79, 70, 229] : [41, 136, 163]);
     doc.setFillColor(...primaryColor);
     doc.rect(0, 0, 210, 8, 'F');
-    try { doc.addImage('/Amec.png', 'PNG', 15, 15, 35, 35); } catch (e) {}
+    try { doc.addImage('/Amec.jpeg', 'PNG', 15, 15, 35, 35); } catch (e) {}
     doc.setTextColor(...primaryColor);
     doc.setFontSize(12); doc.setFont('helvetica', 'bold');
     doc.text(data.title.toUpperCase(), 195, 20, { align: 'right' });
@@ -540,7 +540,7 @@ export function generateMonthlyReportPDF(data: ReportData) {
   // Header Decorativo
   doc.setFillColor(...primaryColor);
   doc.rect(0, 0, 210, 15, 'F');
-  try { doc.addImage('/Amec.png', 'PNG', 15, 20, 25, 25); } catch (e) {}
+  try { doc.addImage('/Amec.jpeg', 'PNG', 15, 20, 25, 25); } catch (e) {}
   doc.setFont('helvetica', 'bold'); doc.setFontSize(22); doc.setTextColor(...primaryColor);
   doc.text('REPORTE EJECUTIVO MENSUAL', 195, 35, { align: 'right' });
   doc.setFontSize(12); doc.setTextColor(100, 100, 100);
@@ -645,7 +645,7 @@ export function generateWeeklyReportPDF(data: WeeklyReportData) {
   // Header
   doc.setFillColor(...primaryColor);
   doc.rect(0, 0, 210, 15, 'F');
-  try { doc.addImage('/Amec.png', 'PNG', 15, 20, 25, 25); } catch (e) {}
+  try { doc.addImage('/Amec.jpeg', 'PNG', 15, 20, 25, 25); } catch (e) {}
   doc.setFont('helvetica', 'bold'); doc.setFontSize(22); doc.setTextColor(...primaryColor);
   doc.text('REPORTE EJECUTIVO SEMANAL', 195, 35, { align: 'right' });
   doc.setFontSize(12); doc.setTextColor(100, 100, 100);

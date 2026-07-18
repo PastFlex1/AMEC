@@ -32,5 +32,5 @@ export const DEFAULT_TAX_CONFIG: TaxConfig = {
   estab: "001",
   ptoEmi: "100",
   phone: "025158093 - 0992769292 - 0989411821",
-  email: "ap91.mor@gmail.com"
+  email: "amec.marcando.diferencia@hotmail.com"
 };
