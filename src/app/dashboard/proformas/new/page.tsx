@@ -233,16 +233,6 @@ export default function NewProformaPage() {
         const docRef = await addDoc(collection(db, "proformas"), proformaData);
         currentId = docRef.id;
         setSavedDocId(currentId);
-
-        const batchUpdates = [];
-        for (const item of proformaData.items) {
-          if (item.productId) {
-            batchUpdates.push(updateDoc(doc(db, "products", item.productId), {
-              stock: increment(-item.quantity)
-            }));
-          }
-        }
-        if (batchUpdates.length > 0) await Promise.all(batchUpdates);
       }
       
       toast({ title: "Proforma guardada" });

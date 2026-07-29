@@ -57,12 +57,12 @@ import {
   TooltipContent
 } from "@/components/ui/tooltip";
 import { useFirestore, useDoc, useCollection } from "@/firebase";
-import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc, getDoc } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc, getDoc, increment } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { generateBillingPDF, getBillingPDFBase64, generateThermalPDF } from "@/lib/pdf-service";
 import { sendBillingEmail } from "@/app/actions/email-actions";
-import { emitirFacturaAction } from "@/app/actions/sri-actions";
+import { emitirFacturaAction, firmarXmlAction, recepcionarSriAction, autorizarSriAction } from "@/app/actions/sri-actions";
 import { generateInvoiceXML, generateCreditNoteXML, downloadXML } from "@/lib/sri-xml-service";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -304,6 +304,19 @@ export default function EditInvoicePage() {
       if (customAuthorizedXml) updateData.authorizedXml = customAuthorizedXml;
       if (customSriError !== undefined) updateData.sriError = customSriError;
 
+      if ((customStatus === "Autorizado" || currentStatus === "Autorizado") && !invoice?.stockDeducted) {
+        updateData.stockDeducted = true;
+        const batchUpdates = [];
+        for (const item of (updateData.items || [])) {
+          if (item.productId) {
+            batchUpdates.push(updateDoc(doc(db, "products", item.productId), {
+              stock: increment(-item.quantity)
+            }));
+          }
+        }
+        if (batchUpdates.length > 0) await Promise.all(batchUpdates);
+      }
+
       await updateDoc(invoiceRef, updateData);
       
       if (isSilent) {
@@ -415,13 +428,24 @@ export default function EditInvoicePage() {
         balance: balance
       });
 
-      const res = await emitirFacturaAction(xmlBase);
-      if (!res.success) throw new Error(res.error);
+      // 1️⃣ Paso 1: Firmar XML
+      const resFirma = await firmarXmlAction(xmlBase);
+      if (!resFirma.success) throw new Error(resFirma.error);
+      setSriStatus(prev => ({ ...prev, firma: true }));
+
+      // 2️⃣ Paso 2: Recepción SRI
+      const resRecepcion = await recepcionarSriAction(resFirma.xmlFirmado!);
+      if (!resRecepcion.success) throw new Error(resRecepcion.error);
+      setSriStatus(prev => ({ ...prev, recepcion: true }));
+
+      // 3️⃣ Paso 3: Autorización SRI
+      const resAuth = await autorizarSriAction(resFirma.claveAcceso!);
+      if (!resAuth.success) throw new Error(resAuth.error);
+      setSriStatus(prev => ({ ...prev, autorizacion: true }));
 
       const authDateStr = format(new Date(), "dd/MM/yyyy HH:mm:ss");
       
-      setSriStatus({ firma: true, recepcion: true, autorizacion: true });
-      await handleSave("Autorizado", authDateStr, res.autorizacion, "");
+      await handleSave("Autorizado", authDateStr, resAuth.autorizacion, "");
       toast({ title: "Factura Autorizada con éxito" });
 
     } catch (error: any) {

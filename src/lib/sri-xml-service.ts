@@ -152,9 +152,6 @@ export function generateInvoiceXML(data: SRIInvoiceData): string {
   xml += `        <ptoEmi>${data.ptoEmi.padStart(3, "0")}</ptoEmi>\n`;
   xml += `        <secuencial>${data.secuencial.padStart(9, "0")}</secuencial>\n`;
   xml += `        <dirMatriz>${data.dirMatriz}</dirMatriz>\n`;
-  if (data.regimen && data.regimen.toUpperCase().includes("RIMPE")) {
-    xml += `        <contribuyenteRimpe>Contribuyente Régimen RIMPE</contribuyenteRimpe>\n`;
-  }
   xml += `    </infoTributaria>\n\n`;
 
   xml += `    <infoFactura>\n`;
@@ -221,6 +218,9 @@ export function generateInvoiceXML(data: SRIInvoiceData): string {
   xml += `    </detalles>\n\n`;
 
   const additionalFields = [];
+  if (data.regimen && data.regimen.toUpperCase().includes("RIMPE")) {
+    additionalFields.push({ name: "contribuyenteRimpe", value: "CONTRIBUYENTE RÉGIMEN RIMPE" });
+  }
   if (data.cliente.email) additionalFields.push({ name: "email", value: data.cliente.email });
   if (data.cliente.telefono) additionalFields.push({ name: "telefono", value: data.cliente.telefono });
   if (data.observaciones) additionalFields.push({ name: "observaciones", value: data.observaciones });
@@ -285,9 +285,6 @@ export function generateCreditNoteXML(data: SRIInvoiceData): string {
   xml += `        <ptoEmi>${data.ptoEmi.padStart(3, "0")}</ptoEmi>\n`;
   xml += `        <secuencial>${data.secuencial.padStart(9, "0")}</secuencial>\n`;
   xml += `        <dirMatriz>${data.dirMatriz}</dirMatriz>\n`;
-  if (data.regimen && data.regimen.toUpperCase().includes("RIMPE")) {
-    xml += `        <contribuyenteRimpe>Contribuyente Régimen RIMPE</contribuyenteRimpe>\n`;
-  }
   xml += `    </infoTributaria>\n\n`;
 
   xml += `    <infoNotaCredito>\n`;
@@ -322,7 +319,23 @@ export function generateCreditNoteXML(data: SRIInvoiceData): string {
   xml += `            <razon>Anulación de factura</razon>\n`;
   xml += `            <valor>${safe(total).toFixed(2)}</valor>\n`;
   xml += `        </motivo>\n`;
-  xml += `    </motivos>\n`;
+  xml += `    </motivos>\n\n`;
+
+  const additionalFields = [];
+  if (data.regimen && data.regimen.toUpperCase().includes("RIMPE")) {
+    additionalFields.push({ name: "contribuyenteRimpe", value: "CONTRIBUYENTE RÉGIMEN RIMPE" });
+  }
+  if (data.cliente.email) additionalFields.push({ name: "email", value: data.cliente.email });
+  if (data.cliente.telefono) additionalFields.push({ name: "telefono", value: data.cliente.telefono });
+  if (data.observaciones) additionalFields.push({ name: "observaciones", value: data.observaciones });
+
+  if (additionalFields.length > 0) {
+    xml += `    <infoAdicional>\n`;
+    additionalFields.forEach(field => {
+      xml += `        <campoAdicional nombre="${field.name}">${field.value}</campoAdicional>\n`;
+    });
+    xml += `    </infoAdicional>\n\n`;
+  }
 
   xml += `</notaCredito>`;
   return xml;

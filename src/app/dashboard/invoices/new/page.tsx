@@ -57,7 +57,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { generateBillingPDF, getBillingPDFBase64, generateThermalPDF } from "@/lib/pdf-service";
 import { sendBillingEmail } from "@/app/actions/email-actions";
-import { emitirFacturaAction } from "@/app/actions/sri-actions";
+import { emitirFacturaAction, firmarXmlAction, recepcionarSriAction, autorizarSriAction } from "@/app/actions/sri-actions";
 import { generateInvoiceXML, downloadXML, generateAccessKey } from "@/lib/sri-xml-service";
 import { syncDailyCashClosing } from "@/lib/cash-register-service";
 import { format } from "date-fns";
@@ -91,6 +91,7 @@ export default function NewInvoicePage() {
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
   
   const docIdRef = useRef<string | null>(null);
+  const stockDeductedRef = useRef<boolean>(false);
 
   const [currentStatus, setCurrentStatus] = useState("Pendiente");
 
@@ -371,6 +372,12 @@ export default function NewInvoicePage() {
         invoiceData.createdAt = serverTimestamp();
         const docRef = await addDoc(collection(db, "invoices"), invoiceData);
         docIdRef.current = docRef.id;
+      }
+
+      // Descontar stock ÚNICAMENTE cuando la factura haya sido Autorizada por el SRI
+      if ((customStatus === "Autorizado" || currentStatus === "Autorizado") && !stockDeductedRef.current) {
+        stockDeductedRef.current = true;
+        await updateDoc(doc(db, "invoices", docIdRef.current), { stockDeducted: true });
 
         const batchUpdates = [];
         for (const item of invoiceData.items) {
@@ -438,17 +445,28 @@ export default function NewInvoicePage() {
         obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO"
       });
 
-      const res = await emitirFacturaAction(xmlBase);
-      if (!res.success) throw new Error(res.error);
+      // 1️⃣ Paso 1: Firmar XML
+      const resFirma = await firmarXmlAction(xmlBase);
+      if (!resFirma.success) throw new Error(resFirma.error);
+      setSriStatus(prev => ({ ...prev, firma: true }));
+
+      // 2️⃣ Paso 2: Recepción SRI
+      const resRecepcion = await recepcionarSriAction(resFirma.xmlFirmado!);
+      if (!resRecepcion.success) throw new Error(resRecepcion.error);
+      setSriStatus(prev => ({ ...prev, recepcion: true }));
+
+      // 3️⃣ Paso 3: Autorización SRI
+      const resAuth = await autorizarSriAction(resFirma.claveAcceso!);
+      if (!resAuth.success) throw new Error(resAuth.error);
+      setSriStatus(prev => ({ ...prev, autorizacion: true }));
 
       const formattedAuthDate = format(new Date(), "dd/MM/yyyy HH:mm:ss");
       
-      setSriStatus({ firma: true, recepcion: true, autorizacion: true });
       setAuthDate(formattedAuthDate);
-      setAuthorizedXml(res.autorizacion || null);
+      setAuthorizedXml(resAuth.autorizacion || null);
       setCurrentStatus("Autorizado");
 
-      await handleSave("Autorizado", formattedAuthDate, res.autorizacion, "");
+      await handleSave("Autorizado", formattedAuthDate, resAuth.autorizacion, "");
       toast({ title: "Factura Autorizada por el SRI" });
 
     } catch (error: any) {
