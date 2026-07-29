@@ -44,7 +44,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, doc, deleteDoc, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, deleteDoc, addDoc, serverTimestamp, query, orderBy, limit } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
@@ -68,7 +68,7 @@ export default function CustomersPage() {
 
   const { isSearchingCedula, fetchCedulaData } = useCedulaSearch();
 
-  const customersRef = useMemo(() => (db ? collection(db, "customers") : null), [db]);
+  const customersRef = useMemo(() => (db ? query(collection(db, "customers"), orderBy("name", "asc"), limit(150)) : null), [db]);
   const { data: customers, loading } = useCollection(customersRef);
 
   const filteredCustomers = useMemo(() => {

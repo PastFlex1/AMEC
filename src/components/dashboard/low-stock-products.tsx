@@ -2,14 +2,14 @@
 
 import { useMemo } from "react";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection } from "firebase/firestore";
+import { collection, query, where, limit } from "firebase/firestore";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { AlertTriangle, PackageSearch } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export function LowStockProducts() {
   const db = useFirestore();
-  const productsRef = useMemo(() => (db ? collection(db, "products") : null), [db]);
+  const productsRef = useMemo(() => (db ? query(collection(db, "products"), where("stock", "<=", 10), limit(20)) : null), [db]);
   const { data: products, loading } = useCollection(productsRef);
 
   const lowStockProducts = useMemo(() => {

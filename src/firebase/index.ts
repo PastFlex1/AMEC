@@ -5,17 +5,28 @@ import { getFirestore, Firestore, initializeFirestore, persistentLocalCache, per
 import { getAuth, Auth } from 'firebase/auth';
 import { firebaseConfig } from './config';
 
+let appInstance: FirebaseApp | null = null;
+let dbInstance: Firestore | null = null;
+let authInstance: Auth | null = null;
+
 export function initializeFirebase(): { app: FirebaseApp; db: Firestore; auth: Auth } {
-  const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-  // Habilitar caché persistente para todo el sistema (reduce costos de lectura drásticamente)
-  const db = getApps().length > 0 
-    ? getFirestore(app) 
-    : initializeFirestore(app, {
+  if (!appInstance) {
+    appInstance = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+  }
+  if (!dbInstance) {
+    try {
+      dbInstance = initializeFirestore(appInstance, {
         localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
       });
-  const auth = getAuth(app);
+    } catch {
+      dbInstance = getFirestore(appInstance);
+    }
+  }
+  if (!authInstance) {
+    authInstance = getAuth(appInstance);
+  }
 
-  return { app, db, auth };
+  return { app: appInstance, db: dbInstance, auth: authInstance };
 }
 
 export * from './provider';

@@ -35,7 +35,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, addDoc, deleteDoc, doc, updateDoc, query, orderBy, limit } from "firebase/firestore";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
 
@@ -60,7 +60,7 @@ export default function ProductsPage() {
     setUserRole(localStorage.getItem('amec_user_role'));
   }, []);
 
-  const productsRef = useMemo(() => (db ? collection(db, "products") : null), [db]);
+  const productsRef = useMemo(() => (db ? query(collection(db, "products"), orderBy("name", "asc"), limit(200)) : null), [db]);
   const { data: products, loading: productsLoading } = useCollection(productsRef);
 
   useEffect(() => {

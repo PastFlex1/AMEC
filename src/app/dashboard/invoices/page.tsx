@@ -67,7 +67,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, doc, deleteDoc, query, orderBy, updateDoc, serverTimestamp, addDoc, getDoc } from "firebase/firestore";
+import { collection, doc, deleteDoc, query, orderBy, updateDoc, serverTimestamp, addDoc, getDoc, limit } from "firebase/firestore";
 import { syncDailyCashClosing } from "@/lib/cash-register-service";
 import { DEFAULT_TAX_CONFIG, TaxConfig } from "@/lib/config-helper";
 import { format, parseISO } from "date-fns";
@@ -133,7 +133,7 @@ export default function InvoicesPage() {
 
   const invoicesRef = useMemo(() => {
     if (!db) return null;
-    return query(collection(db, "invoices"), orderBy("invoiceNumber", "desc"));
+    return query(collection(db, "invoices"), orderBy("invoiceNumber", "desc"), limit(100));
   }, [db]);
   
   const { data: invoices, loading } = useCollection(invoicesRef);

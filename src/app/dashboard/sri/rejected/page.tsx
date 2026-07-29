@@ -27,7 +27,7 @@ import {
   AlertDescription,
 } from "@/components/ui/alert";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, query, where, doc, deleteDoc } from "firebase/firestore";
+import { collection, query, where, doc, deleteDoc, limit } from "firebase/firestore";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import Link from "next/link";
@@ -43,7 +43,8 @@ export default function RejectedInvoicesPage() {
     if (!db) return null;
     return query(
       collection(db, "invoices"), 
-      where("status", "==", "Rechazado")
+      where("status", "==", "Rechazado"),
+      limit(100)
     );
   }, [db]);
 

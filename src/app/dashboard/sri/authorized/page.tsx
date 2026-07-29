@@ -25,7 +25,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, getDoc, doc } from "firebase/firestore";
+import { collection, getDoc, doc, query, where, limit } from "firebase/firestore";
 import { format, parseISO, isToday } from "date-fns";
 import { es } from "date-fns/locale";
 import { DEFAULT_TAX_CONFIG, TaxConfig } from "@/lib/config-helper";
@@ -50,7 +50,7 @@ export default function AuthorizedInvoicesPage() {
     }).catch((err) => console.error("Error al cargar config de emisor:", err));
   }, [db]);
 
-  const invoicesRef = useMemo(() => (db ? collection(db, "invoices") : null), [db]);
+  const invoicesRef = useMemo(() => (db ? query(collection(db, "invoices"), where("status", "==", "Autorizado"), limit(100)) : null), [db]);
   const { data: allInvoices, loading } = useCollection(invoicesRef);
 
   const formatDocDate = (dateVal: any) => {

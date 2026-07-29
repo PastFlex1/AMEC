@@ -64,7 +64,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, deleteDoc, doc, updateDoc, serverTimestamp, addDoc, query, orderBy } from "firebase/firestore";
+import { collection, deleteDoc, doc, updateDoc, serverTimestamp, addDoc, query, orderBy, limit } from "firebase/firestore";
 import { syncDailyCashClosing } from "@/lib/cash-register-service";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
@@ -112,7 +112,7 @@ export default function SalesNotesPage() {
 
   const notesRef = useMemo(() => {
     if (!db) return null;
-    return query(collection(db, "salesNotes"), orderBy("noteNumber", "desc"));
+    return query(collection(db, "salesNotes"), orderBy("noteNumber", "desc"), limit(100));
   }, [db]);
   
   const { data: notes, loading } = useCollection(notesRef);

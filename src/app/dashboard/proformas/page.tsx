@@ -63,7 +63,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, doc, deleteDoc, query, orderBy, updateDoc, serverTimestamp, addDoc } from "firebase/firestore";
+import { collection, doc, deleteDoc, query, orderBy, updateDoc, serverTimestamp, addDoc, limit } from "firebase/firestore";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -111,7 +111,7 @@ export default function ProformasPage() {
 
   const proformasRef = useMemo(() => {
     if (!db) return null;
-    return query(collection(db, "proformas"), orderBy("proformaNumber", "desc"));
+    return query(collection(db, "proformas"), orderBy("proformaNumber", "desc"), limit(100));
   }, [db]);
   
   const { data: proformas, loading } = useCollection(proformasRef);
