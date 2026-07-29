@@ -128,9 +128,10 @@ function createPDFDoc(data: PDFData) {
     doc.setFontSize(7);
     doc.text('OBLIGADO A LLEVAR CONTABILIDAD: ' + (emitter.obligadoContabilidad || "NO"), 15, 96);
     if (emitter.regimen) {
-      doc.text('Régimen: ' + emitter.regimen, 15, 99);
       if (emitter.regimen.toUpperCase().includes("RIMPE")) {
-        doc.text('Contribuyente Régimen RIMPE', 15, 102);
+        doc.text('CONTRIBUYENTE RÉGIMEN RIMPE', 15, 100);
+      } else {
+        doc.text('Régimen: ' + emitter.regimen, 15, 100);
       }
     }
     doc.setLineWidth(0.3);
