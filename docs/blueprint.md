@@ -1,4 +1,4 @@
-# **App Name**: AMEC Billing Hub
+# **App Name**: Apm Inox Billing Hub
 
 ## Core Features:
 

@@ -164,7 +164,7 @@ export default function NewSalesNotePage() {
 
       const res = await sendBillingEmail({
         to: clientData.email,
-        subject: `Nota de Venta AMEC - #${noteNumber}`,
+        subject: `Nota de Venta Apm Inox - #${noteNumber}`,
         clientName: clientData.name,
         docType: "Nota de Venta",
         total: totalWithIVA,

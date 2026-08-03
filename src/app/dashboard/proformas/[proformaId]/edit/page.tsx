@@ -255,7 +255,7 @@ export default function EditProformaPage() {
 
       const res = await sendBillingEmail({
         to: clientData.email,
-        subject: `Proforma AMEC - #${proformaNumber}`,
+        subject: `Proforma Apm Inox - #${proformaNumber}`,
         clientName: clientData.name,
         docType: "Proforma",
         total: totalWithIVA,

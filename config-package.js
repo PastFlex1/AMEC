@@ -8,8 +8,8 @@ pkg.scripts['electron:dev'] = 'concurrently "npm run dev" "wait-on tcp:9002 && e
 pkg.scripts['electron:build'] = 'npm run build && node copy-standalone.js && electron-builder';
 
 pkg.build = {
-  appId: 'com.amec.app',
-  productName: 'AMEC',
+  appId: 'com.apminox.app',
+  productName: 'Apm Inox',
   directories: {
     output: 'dist'
   },

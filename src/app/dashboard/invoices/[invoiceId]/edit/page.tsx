@@ -547,7 +547,7 @@ export default function EditInvoicePage() {
 
       const res = await sendBillingEmail({
         to: clientData.email,
-        subject: `Factura AMEC - #${invoice?.invoiceNumber}`,
+        subject: `Factura Apm Inox - #${invoice?.invoiceNumber}`,
         clientName: clientData.name,
         docType: "Factura",
         total: totalWithIVA,

@@ -123,7 +123,7 @@ export default function LoginPage() {
             <div className="relative h-40 w-40 drop-shadow-xl bg-white/50 rounded-3xl p-4">
               <Image
                 src="/Amec.jpeg"
-                alt="Logo AMEC"
+                alt="Logo Apm Inox"
                 fill
                 className="object-contain p-2"
                 priority
@@ -131,7 +131,7 @@ export default function LoginPage() {
             </div>
           </div>
           <div>
-            <h1 className="text-3xl font-black tracking-tight text-foreground">AMEC Billing</h1>
+            <h1 className="text-3xl font-black tracking-tight text-foreground">Apm Inox Billing</h1>
             <p className="text-muted-foreground font-medium">Gestión Inteligente de Facturación</p>
           </div>
         </div>
@@ -155,7 +155,7 @@ export default function LoginPage() {
                     <Input
                       id="email"
                       type="email"
-                      placeholder="ejemplo@amec.com"
+                      placeholder="ejemplo@apminox.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="rounded-xl h-11 border-slate-200 focus:ring-primary/20"
@@ -218,7 +218,7 @@ export default function LoginPage() {
             <Card className="border-none shadow-2xl bg-card/80 backdrop-blur-sm rounded-2xl overflow-hidden">
               <CardHeader className="bg-slate-50/50 border-b border-slate-100">
                 <CardTitle className="text-xl">Nueva Cuenta</CardTitle>
-                <CardDescription>Regístrate como vendedor en AMEC</CardDescription>
+                <CardDescription>Regístrate como vendedor en Apm Inox</CardDescription>
               </CardHeader>
               <form onSubmit={handleRegister}>
                 <CardContent className="space-y-4 pt-6">
@@ -238,7 +238,7 @@ export default function LoginPage() {
                     <Input
                       id="reg-email"
                       type="email"
-                      placeholder="vendedor@amec.com"
+                      placeholder="vendedor@apminox.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="rounded-xl h-11 border-slate-200"
@@ -257,7 +257,7 @@ export default function LoginPage() {
                     />
                   </div>
                   <p className="text-[10px] text-muted-foreground italic px-1 bg-amber-50 p-2 rounded-lg border border-amber-100">
-                    Nota: Al registrarte, tu cuenta quedará vinculada automáticamente a la base de datos de AMEC.
+                    Nota: Al registrarte, tu cuenta quedará vinculada automáticamente a la base de datos de Apm Inox.
                   </p>
                 </CardContent>
                 <CardFooter className="bg-slate-50/50 border-t border-slate-100 pt-6">

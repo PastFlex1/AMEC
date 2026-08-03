@@ -37,7 +37,7 @@ export async function sendBillingEmail(data: EmailData) {
     }
 
     const fromEmail = 'facturacion@amec.space'; 
-    const fromName = 'Facturación AMEC';
+    const fromName = 'Facturación Apm Inox';
 
     const attachments: any[] = [
       {

@@ -20,7 +20,7 @@ export interface TaxConfig {
 export const DEFAULT_TAX_CONFIG: TaxConfig = {
   ruc: "1725389454001",
   razonSocial: "MORALES TOBAR ANDRES PAUL",
-  nombreComercial: "AMEC",
+  nombreComercial: "Apm Inox",
   regimen: "RIMPE - EMPRENDEDOR",
   obligado_contabilidad: false,
   agente_retencion: false,
@@ -28,7 +28,7 @@ export const DEFAULT_TAX_CONFIG: TaxConfig = {
   declara_iva: true,
   periodicidad_iva: "SEMESTRAL",
   tarifa_iva_default: 15,
-  dirMatriz: "Av Jaime roldos oe2-128 y Francisco Sánchez",
+  dirMatriz: "Figueroa Oe 4-14 y 25 de Mayo (a media cuadra del Obelisco de Cotocollao)",
   estab: "001",
   ptoEmi: "100",
   phone: "025158093 - 0992769292 - 0989411821",

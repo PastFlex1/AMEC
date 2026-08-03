@@ -81,7 +81,7 @@ const PAYMENT_MAP: Record<string, string> = {
 const EMITTER_INFO = {
   name: "Andrés Paul Morales Tobar",
   ruc: "1725389454001",
-  address: "Av Jaime roldos oe2-128 y Francisco Sánchez",
+  address: "Figueroa Oe 4-14 y 25 de Mayo (a media cuadra del Obelisco de Cotocollao)",
   phones: "025158093 - 0992769292 - 0989411821",
   email: "amec.marcando.diferencia@hotmail.com"
 };
@@ -115,7 +115,7 @@ function createPDFDoc(data: PDFData) {
     doc.setFontSize(10);
     doc.text(emitter.name, 15, 58);
     doc.setFontSize(11);
-    doc.text('AMEC', 15, 63);
+    doc.text('Apm Inox', 15, 63);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.text('Dirección Matriz:', 15, 68);
@@ -375,7 +375,7 @@ function createTicketPDFDoc(data: PDFData) {
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.text('AMEC', 40, 10, { align: 'center' });
+  doc.text('Apm Inox', 40, 10, { align: 'center' });
   
   doc.setFontSize(9);
   doc.text(emitter.name, 40, 15, { align: 'center' });
@@ -614,7 +614,7 @@ export function generateMonthlyReportPDF(data: ReportData) {
   const finalY = (doc as any).lastAutoTable.finalY + 15;
   doc.setFontSize(7); doc.setTextColor(180, 180, 180);
   doc.text(`Reporte de ventas reales (Excluye Proformas). Generado el ${new Date().toLocaleString()}`, 105, finalY, { align: 'center' });
-  doc.save(`Reporte_Ventas_AMEC_${data.monthName}_${data.year}.pdf`);
+  doc.save(`Reporte_Ventas_Apm_Inox_${data.monthName}_${data.year}.pdf`);
 }
 
 export interface WeeklyReportData {
@@ -743,5 +743,5 @@ export function generateWeeklyReportPDF(data: WeeklyReportData) {
   doc.setFontSize(7); doc.setTextColor(180, 180, 180);
   doc.text(`Reporte de estado de cartera (Semanal). Generado el ${new Date().toLocaleString()}`, 105, finalY + 25, { align: 'center' });
   
-  doc.save(`Reporte_Ventas_Semanal_AMEC.pdf`);
+  doc.save(`Reporte_Ventas_Semanal_Apm_Inox.pdf`);
 }

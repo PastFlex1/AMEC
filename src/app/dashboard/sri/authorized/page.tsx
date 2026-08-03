@@ -201,7 +201,7 @@ export default function AuthorizedInvoicesPage() {
 
       const res = await sendBillingEmail({
         to: clientEmail,
-        subject: `Reenvío: Factura Autorizada AMEC - #${inv.invoiceNumber}`,
+        subject: `Reenvío: Factura Autorizada Apm Inox - #${inv.invoiceNumber}`,
         clientName: inv.clientData?.name || "Cliente",
         docType: "Factura",
         total: inv.total || 0,

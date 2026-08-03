@@ -207,7 +207,7 @@ const Sidebar = React.forwardRef<
             side={side}
           >
             <SheetHeader className="sr-only">
-              <SheetTitle>Navegación AMEC</SheetTitle>
+              <SheetTitle>Navegación Apm Inox</SheetTitle>
               <SheetDescription>Panel de navegación lateral para acceso rápido en dispositivos móviles.</SheetDescription>
             </SheetHeader>
             <div className="flex h-full w-full flex-col">{children}</div>

@@ -144,7 +144,7 @@ export function generateInvoiceXML(data: SRIInvoiceData): string {
   xml += `        <ambiente>2</ambiente>\n`;
   xml += `        <tipoEmision>1</tipoEmision>\n`;
   xml += `        <razonSocial>${data.razonSocialEmisor}</razonSocial>\n`;
-  xml += `        <nombreComercial>${data.nombreComercialEmisor || "AMEC"}</nombreComercial>\n`;
+  xml += `        <nombreComercial>${data.nombreComercialEmisor || "Apm Inox"}</nombreComercial>\n`;
   xml += `        <ruc>${data.rucEmisor}</ruc>\n`;
   xml += `        <claveAcceso>${claveAcceso}</claveAcceso>\n`;
   xml += `        <codDoc>01</codDoc>\n`;
@@ -277,7 +277,7 @@ export function generateCreditNoteXML(data: SRIInvoiceData): string {
   xml += `        <ambiente>2</ambiente>\n`;
   xml += `        <tipoEmision>1</tipoEmision>\n`;
   xml += `        <razonSocial>${data.razonSocialEmisor}</razonSocial>\n`;
-  xml += `        <nombreComercial>${data.nombreComercialEmisor || "AMEC"}</nombreComercial>\n`;
+  xml += `        <nombreComercial>${data.nombreComercialEmisor || "Apm Inox"}</nombreComercial>\n`;
   xml += `        <ruc>${data.rucEmisor}</ruc>\n`;
   xml += `        <claveAcceso>${claveAcceso}</claveAcceso>\n`;
   xml += `        <codDoc>04</codDoc>\n`;

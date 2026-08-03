@@ -1,8 +1,8 @@
 {
   "name": "nextn",
   "version": "0.1.0",
-  "author": "AMEC",
-  "description": "AMEC Desktop App",
+  "author": "Apm Inox",
+  "description": "Apm Inox Desktop App",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -78,8 +78,8 @@
   },
   "main": "main.js",
   "build": {
-    "appId": "com.amec.app",
-    "productName": "AMEC",
+    "appId": "com.apminox.app",
+    "productName": "Apm Inox",
     "directories": {
       "output": "dist4"
     },

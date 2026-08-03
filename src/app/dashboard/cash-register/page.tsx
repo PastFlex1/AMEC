@@ -46,6 +46,7 @@ export default function CashRegisterPage() {
     cash: 0,
     transfers: 0,
     cards: 0,
+    retentions: 0,
     invoicesCount: 0,
     notesCount: 0,
     lastClosingDate: null as any,
@@ -55,16 +56,19 @@ export default function CashRegisterPage() {
   const [selectedClosingDocs, setSelectedClosingDocs] = useState<any[] | null>(null);
 
   useEffect(() => {
-    const savedRole = localStorage.getItem('amec_user_role') || 'sales';
-    const savedName = localStorage.getItem('amec_user_name') || 'Vendedor';
-    setRole(savedRole);
-    setUserName(savedName);
+    if (typeof window !== 'undefined') {
+      const savedRole = localStorage.getItem('amec_user_role') || 'sales';
+      const savedName = localStorage.getItem('amec_user_name') || 'Vendedor';
+      setRole(savedRole);
+      setUserName(savedName);
+    }
   }, []);
 
   useEffect(() => {
-    if (!db || !role || !userName) return;
-    loadData(true);
-  }, [db, role, userName]);
+    if (db && userName) {
+      loadData(true);
+    }
+  }, [db, userName]);
 
   const loadData = async (forceSyncToday = true) => {
     setLoading(true);
@@ -102,6 +106,7 @@ export default function CashRegisterPage() {
           cash: todayDoc.cash || 0,
           transfers: todayDoc.transfers || 0,
           cards: todayDoc.cards || 0,
+          retentions: todayDoc.retentions || 0,
           invoicesCount: todayDoc.invoicesCount || 0,
           notesCount: todayDoc.notesCount || 0,
           lastClosingDate: todayDoc.closingDate ? (todayDoc.closingDate.toDate ? todayDoc.closingDate.toDate() : new Date(todayDoc.closingDate)) : new Date(),
@@ -113,6 +118,7 @@ export default function CashRegisterPage() {
           cash: 0,
           transfers: 0,
           cards: 0,
+          retentions: 0,
           invoicesCount: 0,
           notesCount: 0,
           lastClosingDate: new Date(),

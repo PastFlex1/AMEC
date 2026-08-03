@@ -88,6 +88,7 @@ const PAYMENT_METHODS = [
   { code: "18", label: "TARJETA PREPAGO" },
   { code: "19", label: "TARJETA DE CRÉDITO" },
   { code: "20", label: "OTROS CON UTILIZACIÓN DEL SISTEMA FINANCIERO" },
+  { code: "RET", label: "COMPROBANTE DE RETENCIÓN (RENTA / IVA)" },
 ];
 
 export default function InvoicesPage() {
@@ -130,6 +131,9 @@ export default function InvoicesPage() {
   const [loadingPayment, setLoadingPayment] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("01");
   const [paymentTransferNumber, setPaymentTransferNumber] = useState("");
+  const [retentionNumber, setRetentionNumber] = useState("");
+  const [retentionRenta, setRetentionRenta] = useState<number | "">("");
+  const [retentionIva, setRetentionIva] = useState<number | "">("");
 
   const invoicesRef = useMemo(() => {
     if (!db) return null;
@@ -341,7 +345,7 @@ export default function InvoicesPage() {
 
       const res = await sendBillingEmail({
         to: clientEmail,
-        subject: `Factura AMEC - Comprobante #${inv.invoiceNumber}`,
+        subject: `Factura Apm Inox - Comprobante #${inv.invoiceNumber}`,
         clientName: inv.clientData?.name || "Cliente",
         docType: "Factura",
         total: inv.total || 0,
@@ -443,14 +447,35 @@ export default function InvoicesPage() {
     setPaymentAmount(inv.balance !== undefined ? inv.balance : 0);
     setSelectedPaymentMethod(inv.clientData?.paymentMethod || "01");
     setPaymentTransferNumber(inv.clientData?.transferNumber || "");
+    setRetentionNumber("");
+    setRetentionRenta("");
+    setRetentionIva("");
     setPaymentModalOpen(true);
   };
 
   const handleRegisterPayment = async () => {
     if (!db || !invoiceForPayment) return;
     
+    let finalAmount = paymentAmount;
+    let rentAmt = 0;
+    let ivaAmt = 0;
+
+    if (selectedPaymentMethod === "RET") {
+      if (!retentionNumber.trim()) {
+        toast({ title: "Número de Retención Requerido", description: "Ingrese el número del comprobante de retención.", variant: "destructive" });
+        return;
+      }
+      rentAmt = typeof retentionRenta === "number" ? retentionRenta : parseFloat(retentionRenta as string) || 0;
+      ivaAmt = typeof retentionIva === "number" ? retentionIva : parseFloat(retentionIva as string) || 0;
+      finalAmount = rentAmt + ivaAmt;
+      if (finalAmount <= 0) {
+        toast({ title: "Monto de Retención Inválido", description: "Ingrese al menos un valor para la retención de Renta o IVA.", variant: "destructive" });
+        return;
+      }
+    }
+
     const currentDeposit = invoiceForPayment.deposit || 0;
-    const newDeposit = currentDeposit + paymentAmount;
+    const newDeposit = currentDeposit + finalAmount;
     const newBalance = Math.max(0, invoiceForPayment.total - newDeposit);
 
     setLoadingPayment(true);
@@ -465,15 +490,19 @@ export default function InvoicesPage() {
         type: "Factura",
         docId: invoiceForPayment.id,
         docNumber: invoiceForPayment.invoiceNumber,
-        amount: paymentAmount,
+        amount: finalAmount,
         sellerName: userName,
         clientName: invoiceForPayment.clientData?.name || invoiceForPayment.customerName || "Consumidor Final",
         paymentMethod: selectedPaymentMethod,
-        transferNumber: paymentTransferNumber,
+        transferNumber: selectedPaymentMethod === "20" ? paymentTransferNumber : (selectedPaymentMethod === "RET" ? retentionNumber : ""),
+        isRetention: selectedPaymentMethod === "RET",
+        retentionNumber: selectedPaymentMethod === "RET" ? retentionNumber : "",
+        retentionRentaAmount: rentAmt,
+        retentionIvaAmount: ivaAmt,
         createdAt: serverTimestamp()
       });
 
-      toast({ title: "Pago Registrado", description: "El saldo ha sido actualizado." });
+      toast({ title: "Pago Registrado", description: selectedPaymentMethod === "RET" ? "Retención registrada y saldo actualizado." : "El saldo ha sido actualizado." });
       
       const dateString = format(new Date(), "yyyy-MM-dd");
       await syncDailyCashClosing(db, userName, dateString);
@@ -966,6 +995,57 @@ export default function InvoicesPage() {
                   onChange={(e) => setPaymentTransferNumber(e.target.value)}
                   className="h-14 font-black bg-primary/5 border-primary/20 text-primary rounded-xl"
                 />
+              </div>
+            )}
+            {selectedPaymentMethod === "RET" && (
+              <div className="space-y-4 pt-2 border-t border-slate-100 animate-in slide-in-from-top-2 duration-300">
+                <div className="space-y-1">
+                  <Label className="text-xs font-black uppercase text-primary tracking-widest">No. Comprobante de Retención</Label>
+                  <Input 
+                    placeholder="Ej: 001-001-000012345" 
+                    value={retentionNumber} 
+                    onChange={(e) => setRetentionNumber(e.target.value)}
+                    className="h-12 font-mono font-bold bg-primary/5 border-primary/20 text-slate-900 rounded-xl"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold uppercase text-slate-600">Retención Renta ($)</Label>
+                    <Input 
+                      type="number"
+                      placeholder="0.00"
+                      value={retentionRenta}
+                      onChange={(e) => {
+                        const val = e.target.value === "" ? "" : parseFloat(e.target.value);
+                        setRetentionRenta(val);
+                        const r = typeof val === "number" ? val : 0;
+                        const i = typeof retentionIva === "number" ? retentionIva : 0;
+                        setPaymentAmount(r + i);
+                      }}
+                      className="h-12 font-bold bg-slate-50 rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold uppercase text-slate-600">Retención IVA ($)</Label>
+                    <Input 
+                      type="number"
+                      placeholder="0.00"
+                      value={retentionIva}
+                      onChange={(e) => {
+                        const val = e.target.value === "" ? "" : parseFloat(e.target.value);
+                        setRetentionIva(val);
+                        const i = typeof val === "number" ? val : 0;
+                        const r = typeof retentionRenta === "number" ? retentionRenta : 0;
+                        setPaymentAmount(r + i);
+                      }}
+                      className="h-12 font-bold bg-slate-50 rounded-xl"
+                    />
+                  </div>
+                </div>
+                <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs font-bold text-amber-900 flex justify-between items-center">
+                  <span>Total Abonado por Retención:</span>
+                  <span className="font-black text-sm text-amber-700">${(((typeof retentionRenta === "number" ? retentionRenta : 0) + (typeof retentionIva === "number" ? retentionIva : 0))).toFixed(2)}</span>
+                </div>
               </div>
             )}
           </div>

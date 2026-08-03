@@ -54,7 +54,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="relative h-40 w-40 drop-shadow-2xl bg-white rounded-[2rem] p-6 shadow-xl border border-slate-100">
           <Image 
             src="/Amec.jpeg" 
-            alt="Logo AMEC" 
+            alt="Logo Apm Inox" 
             fill 
             className="object-contain p-4 animate-pulse" 
             priority
@@ -63,7 +63,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex flex-col items-center space-y-4 text-center px-6">
           <div className="flex items-center gap-3 text-slate-900 font-black uppercase tracking-tighter text-2xl">
             <Loader2 className="h-7 w-7 animate-spin text-primary" />
-            <span>Iniciando AMEC Cloud</span>
+            <span>Iniciando Apm Inox Cloud</span>
           </div>
           <div className="space-y-1">
             <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em]">Sincronizando base de datos en tiempo real</p>
@@ -82,14 +82,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="h-10 w-10 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 relative shrink-0">
               <Image 
                 src="/Amec.jpeg" 
-                alt="Logo AMEC" 
+                alt="Logo Apm Inox" 
                 fill 
                 sizes="40px"
                 className="object-contain" 
               />
             </div>
             <div className="group-data-[collapsible=icon]:hidden overflow-hidden">
-              <span className="font-black text-xl tracking-tighter block leading-none truncate">AMEC</span>
+              <span className="font-black text-xl tracking-tighter block leading-none truncate">Apm Inox</span>
               <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest truncate">Billing System</span>
             </div>
           </div>
@@ -167,7 +167,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         
         <footer className="p-8 border-t border-slate-100 bg-white/50 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="space-y-1">
-            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">© 2024 AMEC Billing • v2.0</p>
+            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">© 2024 Apm Inox Billing • v2.0</p>
             <p className="text-[9px] font-bold text-slate-400/80 uppercase tracking-tighter">Palma Nexus Solutions</p>
           </div>
           <div className="flex gap-6">

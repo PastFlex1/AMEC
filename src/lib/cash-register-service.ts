@@ -61,6 +61,7 @@ export async function syncDailyCashClosing(db: any, sellerName: string, dateStri
     let cash = 0;
     let transfers = 0;
     let cards = 0;
+    let retentions = 0;
     let totalAmount = 0;
     const documents: any[] = [];
 
@@ -75,6 +76,7 @@ export async function syncDailyCashClosing(db: any, sellerName: string, dateStri
       if (method === "01") cash += amount;
       else if (method === "16" || method === "18" || method === "19") cards += amount;
       else if (method === "20") transfers += amount;
+      else if (method === "RET") retentions += amount;
       else cash += amount;
 
       documents.push({
@@ -93,6 +95,7 @@ export async function syncDailyCashClosing(db: any, sellerName: string, dateStri
       if (method === "01") cash += amount;
       else if (method === "16" || method === "18" || method === "19") cards += amount;
       else if (method === "20") transfers += amount;
+      else if (method === "RET") retentions += amount;
       else cash += amount;
 
       documents.push({
@@ -112,6 +115,7 @@ export async function syncDailyCashClosing(db: any, sellerName: string, dateStri
       if (method === "01") cash += amount;
       else if (method === "16" || method === "18" || method === "19") cards += amount;
       else if (method === "20") transfers += amount;
+      else if (method === "RET") retentions += amount;
       else cash += amount;
 
       documents.push({
@@ -137,6 +141,7 @@ export async function syncDailyCashClosing(db: any, sellerName: string, dateStri
       cash,
       transfers,
       cards,
+      retentions,
       invoicesCount: dayInvoices.length,
       notesCount: dayNotes.length,
       documents

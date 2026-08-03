@@ -158,7 +158,7 @@ export default function SalespeoplePage() {
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
                     type="email"
-                    placeholder="vendedor@amec.com" 
+                    placeholder="vendedor@apminox.com" 
                     className="pl-10 h-11 rounded-xl"
                     value={newUser.email}
                     onChange={(e) => setNewUser({...newUser, email: e.target.value})}
