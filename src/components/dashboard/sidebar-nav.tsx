@@ -89,6 +89,7 @@ export function SidebarNav({ role, searchQuery = "" }: SidebarNavProps) {
       items: [
         { title: "Autorizadas", href: "/dashboard/sri/authorized", icon: CheckCircle2 },
         { title: "Rechazadas", href: "/dashboard/sri/rejected", icon: XCircle },
+        { title: "Retenciones", href: "/dashboard/sri/retenciones/new", icon: FileText },
         { title: "Configuración SRI", href: "/dashboard/sri/config", icon: Settings },
       ]
     }

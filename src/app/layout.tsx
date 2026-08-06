@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   title: 'Apm Inox Centro de Facturación',
   description: 'Solución de Facturación y CRM de Grado Empresarial',
   icons: {
-    icon: '/Amec.jpeg',
+    icon: '/APM INOX LOGO.png',
   },
 };
 
