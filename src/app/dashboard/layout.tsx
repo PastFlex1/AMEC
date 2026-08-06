@@ -56,6 +56,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             src="/APM INOX LOGO.png" 
             alt="Logo Apm Inox" 
             fill 
+            sizes="160px"
             className="object-contain p-4 animate-pulse" 
             priority
           />

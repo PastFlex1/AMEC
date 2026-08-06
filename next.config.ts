@@ -1,5 +1,5 @@
-
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   typescript: {
@@ -8,13 +8,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  outputFileTracingRoot: process.cwd(),
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '20mb',
-      allowedOrigins: ["http://127.0.0.1:3333", "http://127.0.0.1:3000", "http://localhost:3333", "http://localhost:3000"],
-    },
-  },
+  outputFileTracingRoot: path.join(__dirname),
   images: {
     remotePatterns: [
       {
@@ -34,7 +28,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-
   serverExternalPackages: ["jspdf", "jsbarcode"],
   output: "standalone",
 };

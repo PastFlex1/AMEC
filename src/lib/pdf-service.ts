@@ -745,3 +745,262 @@ export function generateWeeklyReportPDF(data: WeeklyReportData) {
   
   doc.save(`Reporte_Ventas_Semanal_Apm_Inox.pdf`);
 }
+
+export interface RetentionPDFData {
+  emitter?: {
+    name?: string;
+    ruc?: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+    obligadoContabilidad?: string;
+    contribuyenteEspecial?: string;
+  };
+  client: {
+    name: string;
+    ruc: string;
+    address?: string;
+    email?: string;
+    phone?: string;
+  };
+  docNumber: string;
+  accessKey?: string;
+  authDate?: string;
+  environment?: string;
+  emissionType?: string;
+  date: string;
+  retenciones: Array<{
+    comprobante?: string;
+    numero?: string;
+    fechaEmision?: string;
+    ejercicioFiscal?: string;
+    baseImponible: number;
+    impuesto: string;
+    codigo: string;
+    porcentaje: number;
+    valorRetenido: number;
+  }>;
+  totalRetenido: number;
+  status?: string;
+}
+
+function createRetentionPDFDoc(data: RetentionPDFData) {
+  const doc = new jsPDF() as any;
+  const authNumber = data.accessKey || "0000000000000000000000000000000000000000000000000";
+  const displayNum = data.docNumber || "000-000-000000000";
+  const isAutorizado = data.status?.trim().toLowerCase() === "autorizado";
+
+  const emitter = {
+    name: data.emitter?.name || EMITTER_INFO.name,
+    ruc: data.emitter?.ruc || EMITTER_INFO.ruc,
+    address: data.emitter?.address || EMITTER_INFO.address,
+    phone: data.emitter?.phone || EMITTER_INFO.phones,
+    email: data.emitter?.email || EMITTER_INFO.email,
+    obligadoContabilidad: data.emitter?.obligadoContabilidad || "NO",
+    contribuyenteEspecial: data.emitter?.contribuyenteEspecial || "N/A"
+  };
+
+  // Logo (si existe)
+  try { doc.addImage('/APM INOX LOGO.png', 'PNG', 15, 10, 35, 35); } catch (e) {}
+
+  // Recuadro Emisor (Izquierda)
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.3);
+  doc.setTextColor(0);
+  doc.roundedRect(10, 52, 90, 52, 3, 3, 'S');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text(emitter.name, 12, 58, { maxWidth: 85 });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.text('Dir Matriz:', 12, 66);
+  doc.text(emitter.address, 32, 66, { maxWidth: 65 });
+
+  doc.text('Dir Sucursal:', 12, 74);
+  doc.text(emitter.address, 32, 74, { maxWidth: 65 });
+
+  doc.text(`Teléfono:`, 12, 82);
+  doc.text(emitter.phone || "", 32, 82);
+
+  doc.text(`Contribuyente especial:`, 12, 88);
+  doc.text(emitter.contribuyenteEspecial, 55, 88);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.text('OBLIGADO A LLEVAR CONTABILIDAD:', 12, 96);
+  doc.text(emitter.obligadoContabilidad, 68, 96);
+
+  // Recuadro SRI (Derecha)
+  doc.setLineWidth(0.3);
+  doc.roundedRect(105, 10, 95, 94, 3, 3, 'S');
+
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`R.U.C.:   ${emitter.ruc}`, 110, 18);
+  
+  doc.setFontSize(12);
+  doc.text('COMPROBANTE DE RETENCIÓN', 110, 26);
+
+  doc.setFontSize(10);
+  doc.text(`No.         ${displayNum}`, 110, 34);
+
+  doc.setFontSize(8);
+  doc.text('NÚMERO DE AUTORIZACIÓN', 110, 42);
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text(authNumber, 110, 47, { maxWidth: 88 });
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('FECHA Y HORA DE AUTORIZACIÓN', 110, 55);
+  doc.setFont('helvetica', 'normal');
+  doc.text(isAutorizado ? (data.authDate || data.date) : (data.authDate || "PENDIENTE"), 165, 55);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('AMBIENTE:', 110, 63);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.environment || 'PRODUCCIÓN', 145, 63);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('EMISIÓN:', 110, 71);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.emissionType || 'NORMAL', 145, 71);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('CLAVE DE ACCESO', 110, 78);
+
+  // Barcode
+  if (typeof document !== 'undefined') {
+    try {
+      const canvas = document.createElement('canvas');
+      JsBarcode(canvas, authNumber, { format: "CODE128", displayValue: false, height: 40, width: 1, margin: 0 });
+      const barcodeData = canvas.toDataURL("image/png");
+      doc.addImage(barcodeData, 'PNG', 110, 81, 85, 10);
+      doc.setFontSize(6);
+      doc.text(authNumber, 152.5, 95, { align: 'center' });
+    } catch (e) {}
+  }
+
+  // Recuadro Sujeto Retenido (Middle)
+  doc.setLineWidth(0.3);
+  doc.roundedRect(10, 108, 190, 18, 1, 1, 'S');
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Razón Social / Nombres y Apellidos :', 12, 114);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.client.name.toUpperCase(), 65, 114, { maxWidth: 75 });
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('RUC / CI :', 142, 114);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.client.ruc, 160, 114);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('Fecha Emisión:', 12, 122);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.date, 38, 122);
+
+  // Tabla de Retenciones
+  const tableBody = data.retenciones.map(ret => [
+    ret.comprobante || 'Factura',
+    ret.numero || '000-000-000000000',
+    ret.fechaEmision || data.date,
+    ret.ejercicioFiscal || (data.date.length >= 7 ? data.date.substring(3) : '08/2026'),
+    safe(ret.baseImponible).toFixed(2),
+    (ret.impuesto || 'RENTA').toUpperCase(),
+    ret.codigo || '343',
+    safe(ret.porcentaje).toFixed(2),
+    safe(ret.valorRetenido).toFixed(2)
+  ]);
+
+  doc.autoTable({
+    startY: 130,
+    head: [['Comprobante', 'Número', 'Fecha Emisión', 'Ejercicio Fiscal', 'Base Imponible para la Retención', 'IMPUESTO', 'Codigo', 'Porcentaje Retención', 'Valor Retenido']],
+    body: tableBody,
+    theme: 'plain',
+    tableLineColor: [0, 0, 0],
+    tableLineWidth: 0.3,
+    headStyles: {
+      fillColor: [255, 255, 255],
+      textColor: [0, 0, 0],
+      fontSize: 7,
+      fontStyle: 'bold',
+      halign: 'center',
+      valign: 'middle',
+      lineWidth: 0.3,
+      lineColor: [0, 0, 0]
+    },
+    bodyStyles: {
+      fontSize: 7,
+      textColor: [0, 0, 0],
+      halign: 'center',
+      valign: 'middle',
+      lineWidth: 0.3,
+      lineColor: [0, 0, 0]
+    },
+    columnStyles: {
+      0: { halign: 'left', width: 22 },
+      1: { halign: 'center', width: 30 },
+      2: { halign: 'center', width: 20 },
+      3: { halign: 'center', width: 18 },
+      4: { halign: 'right', width: 30 },
+      5: { halign: 'center', width: 18 },
+      6: { halign: 'center', width: 15 },
+      7: { halign: 'right', width: 20 },
+      8: { halign: 'right', width: 17 }
+    }
+  });
+
+  const finalY = (doc as any).lastAutoTable.finalY + 3;
+
+  // Box Total
+  doc.setLineWidth(0.3);
+  doc.setDrawColor(0);
+  doc.rect(145, finalY, 55, 7, 'S');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.text('Total', 148, finalY + 4.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text(safe(data.totalRetenido).toFixed(2), 197, finalY + 4.5, { align: 'right' });
+
+  // Recuadro Información Adicional
+  const infoY = finalY + 12;
+  doc.roundedRect(25, infoY, 100, 26, 1, 1, 'S');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.text('Información Adicional', 75, infoY + 5, { align: 'center' });
+
+  doc.setFontSize(7.5);
+  doc.text('Dirección:', 28, infoY + 11);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.client.address || 'S/N', 45, infoY + 11, { maxWidth: 78 });
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('Teléfono:', 28, infoY + 17);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.client.phone || 'N/A', 45, infoY + 17);
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('Email:', 28, infoY + 23);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.client.email || 'N/A', 45, infoY + 23, { maxWidth: 78 });
+
+  return doc;
+}
+
+export function generateRetentionPDF(data: RetentionPDFData) {
+  const doc = createRetentionPDFDoc(data);
+  doc.save(`Retencion_${data.docNumber || '000-000-000000000'}.pdf`);
+}
+
+export function getRetentionPDFBase64(data: RetentionPDFData): string {
+  const doc = createRetentionPDFDoc(data);
+  const dataUri = doc.output('datauristring');
+  return dataUri.split(',')[1];
+}
+

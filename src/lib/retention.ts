@@ -40,9 +40,16 @@ const safe = (n: any) => Number(n || 0);
 /**
  * Función auxiliar para asegurar que las fechas estén en formato DD/MM/YYYY.
  */
-function ensureDateFormat(dateStr: string): string {
+export function ensureDateFormat(dateStr: string): string {
+  if (!dateStr) {
+    const today = new Date();
+    const dd = String(today.getDate()).padStart(2, '0');
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const yyyy = today.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  }
   if (dateStr.includes('-')) {
-    const parts = dateStr.split('-');
+    const parts = dateStr.split('T')[0].split('-');
     if (parts[0].length === 4) { // YYYY-MM-DD
       return `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
@@ -51,16 +58,16 @@ function ensureDateFormat(dateStr: string): string {
 }
 
 /**
- * Genera la clave de acceso de 49 dígitos específica para comprobantes de retención (tipo 07).
+ * Genera la clave de acceso de 49 dígitos específica para comprobantes de retención (tipo 07) usando Módulo 11.
  */
 export function generateRetentionAccessKey(data: SRIRetentionData): string {
   const formattedDate = ensureDateFormat(data.fechaEmision);
   const dateStr = formattedDate.replace(/\//g, ""); 
   const codDoc = "07"; // 07 = Comprobante de Retención
-  const ruc = data.rucEmisor.padStart(13, "0");
-  const ambiente = "2"; 
-  const serie = data.estab.padStart(3, "0") + data.ptoEmi.padStart(3, "0");
-  const secuencial = data.secuencial.padStart(9, "0");
+  const ruc = (data.rucEmisor || "").padStart(13, "0");
+  const ambiente = "2"; // Producción / Pruebas segun SRI
+  const serie = (data.estab || "001").padStart(3, "0") + (data.ptoEmi || "001").padStart(3, "0");
+  const secuencial = (data.secuencial || "1").padStart(9, "0");
   const codigoNumerico = "12345678"; 
   const tipoEmision = "1";
 
@@ -71,10 +78,15 @@ export function generateRetentionAccessKey(data: SRIRetentionData): string {
 }
 
 /**
+ * Alias en español como se solicitó en las especificaciones del requerimiento.
+ */
+export const generarClaveAccesoRetencion = generateRetentionAccessKey;
+
+/**
  * Genera el string XML estructurado para Comprobantes de Retención.
  */
 export function generateRetentionXML(data: SRIRetentionData): string {
-  // Validaciones
+  // Validaciones primarias
   if (!data.rucEmisor) throw new Error("RUC emisor es obligatorio");
   if (!data.identificacion) throw new Error("Identificación del sujeto retenido es obligatoria");
   if (!data.numeroFactura) throw new Error("Número de factura sustentada es obligatorio");
@@ -92,7 +104,7 @@ export function generateRetentionXML(data: SRIRetentionData): string {
   if (!data.tipoIdentificacion) {
     const idStr = data.identificacion;
     if (idStr === "9999999999999") {
-      tipoId = "07"; // Consumidor final (aunque raro en retención, se cubre por seguridad)
+      tipoId = "07"; // Consumidor final
     } else if (idStr.length === 13) {
       tipoId = "04"; // RUC
     } else if (idStr.length === 10) {
@@ -105,9 +117,9 @@ export function generateRetentionXML(data: SRIRetentionData): string {
   
   const codDocSustento = data.codDocSustento || "01"; // 01 = Factura
   
-  // El numDocSustento va sin guiones según el estándar en algunos tags, 
-  // pero mantendremos el replace de guiones por si el usuario lo envía como "001-001-123456789"
-  const numDocSustento = data.numeroFactura.replace(/-/g, "");
+  // numDocSustento sin guiones (15 dígitos: estab(3)+ptoEmi(3)+secuencial(9))
+  const rawNumDoc = data.numeroFactura.replace(/-/g, "");
+  const numDocSustento = rawNumDoc.padStart(15, "0");
   
   // Clave de acceso o autorización de la factura que se está reteniendo
   const numAutDocSustento = data.claveAccesoFactura || "0000000000000000000000000000000000000000000000000";
@@ -123,9 +135,9 @@ export function generateRetentionXML(data: SRIRetentionData): string {
   xml += `        <ruc>${data.rucEmisor}</ruc>\n`;
   xml += `        <claveAcceso>${claveAcceso}</claveAcceso>\n`;
   xml += `        <codDoc>${codDoc}</codDoc>\n`;
-  xml += `        <estab>${data.estab.padStart(3, "0")}</estab>\n`;
-  xml += `        <ptoEmi>${data.ptoEmi.padStart(3, "0")}</ptoEmi>\n`;
-  xml += `        <secuencial>${data.secuencial.padStart(9, "0")}</secuencial>\n`;
+  xml += `        <estab>${(data.estab || "001").padStart(3, "0")}</estab>\n`;
+  xml += `        <ptoEmi>${(data.ptoEmi || "001").padStart(3, "0")}</ptoEmi>\n`;
+  xml += `        <secuencial>${(data.secuencial || "1").padStart(9, "0")}</secuencial>\n`;
   xml += `        <dirMatriz>${data.dirMatriz}</dirMatriz>\n`;
   xml += `    </infoTributaria>\n\n`;
 
@@ -164,4 +176,11 @@ export function generateRetentionXML(data: SRIRetentionData): string {
   xml += `</comprobanteRetencion>`;
   
   return xml;
+}
+
+/**
+ * Alias en español para generarRetencionXML que acepta factura autorizada directamente.
+ */
+export function generarRetencionXML(data: SRIRetentionData): string {
+  return generateRetentionXML(data);
 }
