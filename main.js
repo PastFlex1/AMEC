@@ -55,7 +55,7 @@ function crearVentana() {
     width: 1200,
     height: 800,
     show: true,
-    icon: path.join(__dirname, 'public', 'Amec.png'),
+    icon: path.join(__dirname, 'public', 'APM INOX LOGO.png'),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false

@@ -122,7 +122,7 @@ export default function LoginPage() {
           <div className="flex justify-center">
             <div className="relative h-40 w-40 drop-shadow-xl bg-white/50 rounded-3xl p-4">
               <Image
-                src="/Amec.jpeg"
+                src="/APM INOX LOGO.png"
                 alt="Logo Apm Inox"
                 fill
                 className="object-contain p-2"

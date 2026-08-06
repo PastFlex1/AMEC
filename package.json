@@ -83,7 +83,7 @@
     "directories": {
       "output": "dist4"
     },
-    "icon": "public/Amec.png",
+    "icon": "public/APM INOX LOGO.png",
     "files": [
       "main.js",
       "public/**/*",

@@ -53,7 +53,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="h-screen w-full flex flex-col items-center justify-center bg-[#f8fafc] space-y-8 animate-in fade-in duration-700">
         <div className="relative h-40 w-40 drop-shadow-2xl bg-white rounded-[2rem] p-6 shadow-xl border border-slate-100">
           <Image 
-            src="/Amec.jpeg" 
+            src="/APM INOX LOGO.png" 
             alt="Logo Apm Inox" 
             fill 
             className="object-contain p-4 animate-pulse" 
@@ -81,7 +81,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
             <div className="h-10 w-10 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 relative shrink-0">
               <Image 
-                src="/Amec.jpeg" 
+                src="/APM INOX LOGO.png" 
                 alt="Logo Apm Inox" 
                 fill 
                 sizes="40px"
