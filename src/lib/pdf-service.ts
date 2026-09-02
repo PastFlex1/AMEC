@@ -1,6 +1,43 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import JsBarcode from 'jsbarcode';
+import { generateAccessKey } from '@/lib/sri-xml-service';
+import { generateRetentionAccessKey } from '@/lib/retention';
+
+function formatToDDMMYYYY(dateVal?: any): string {
+  if (!dateVal) {
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const yyyy = now.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  if (typeof dateVal !== 'string') {
+    const d = dateVal.toDate ? dateVal.toDate() : new Date(dateVal);
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  const dateStr = dateVal.trim();
+  if (dateStr.includes('/')) {
+    const parts = dateStr.split('/');
+    if (parts[0].length === 4) {
+      // YYYY/MM/DD
+      return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+    }
+    return dateStr;
+  }
+  if (dateStr.includes('-')) {
+    const clean = dateStr.split('T')[0];
+    const parts = clean.split('-');
+    if (parts[0].length === 4) {
+      // YYYY-MM-DD
+      return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+    }
+  }
+  return dateStr;
+}
 
 interface PDFData {
   title: string;
@@ -82,7 +119,7 @@ const EMITTER_INFO = {
   name: "Andrés Paul Morales Tobar",
   ruc: "1725389454001",
   address: "Figueroa Oe 4-14 y 25 de Mayo (a media cuadra del Obelisco de Cotocollao)",
-  phones: "025158093 - 0992769292 - 0989411821",
+  phones: "0992350548",
   email: "amec.marcando.diferencia@hotmail.com"
 };
 
@@ -91,7 +128,7 @@ const safe = (n: any) => Number(n || 0);
 function createPDFDoc(data: PDFData) {
   const doc = new jsPDF() as any;
   const isFactura = data.title === "Factura";
-  const displayNum = data.docNumber || "001-100-XXXXXXXXX";
+  const displayNum = data.docNumber || "001-100-000000001";
   const isAutorizado = data.status?.trim().toLowerCase() === "autorizado";
 
   const emitter = data.emitter || {
@@ -105,7 +142,34 @@ function createPDFDoc(data: PDFData) {
   };
 
   if (isFactura) {
-    const authNumber = data.accessKey || "0000000000000000000000000000000000000000000000000";
+    let authNumber = (data.accessKey || "").trim();
+    if (!authNumber || /^0+$/.test(authNumber) || authNumber.length !== 49) {
+      const formattedDate = formatToDDMMYYYY(data.date);
+      const docParts = (data.docNumber || "001-100-000000001").split('-');
+      const estab = (docParts[0] || "001").trim();
+      const ptoEmi = (docParts[1] || "100").trim();
+      const secuencial = (docParts[2] || "000000001").trim();
+      try {
+        authNumber = generateAccessKey({
+          rucEmisor: emitter.ruc || EMITTER_INFO.ruc,
+          razonSocialEmisor: emitter.name || EMITTER_INFO.name,
+          dirMatriz: emitter.address || EMITTER_INFO.address,
+          estab,
+          ptoEmi,
+          secuencial,
+          fechaEmision: formattedDate,
+          cliente: {
+            razonSocial: data.client.name,
+            identificacion: data.client.ruc,
+          },
+          items: [],
+          formaPago: data.client.paymentMethod || "01"
+        });
+      } catch (e) {
+        console.error("Error generating fallback accessKey for RIDE:", e);
+        authNumber = "0000000000000000000000000000000000000000000000000";
+      }
+    }
     try { doc.addImage('/APM INOX LOGO.png', 'PNG', 15, 10, 35, 35); } catch (e) {}
     doc.setDrawColor(0);
     doc.setLineWidth(0.3); 
@@ -490,17 +554,44 @@ function createTicketPDFDoc(data: PDFData) {
   doc.text(payLines, 40, y, { align: 'center' });
   y += payLines.length * 4 + 2;
   
-  if (data.accessKey) {
+  let ticketAccessKey = (data.accessKey || "").trim();
+  const isFacturaDoc = data.title === "Factura";
+  if (isFacturaDoc && (!ticketAccessKey || /^0+$/.test(ticketAccessKey) || ticketAccessKey.length !== 49)) {
+    const formattedDate = formatToDDMMYYYY(data.date);
+    const docParts = (data.docNumber || "001-100-000000001").split('-');
+    const estab = (docParts[0] || "001").trim();
+    const ptoEmi = (docParts[1] || "100").trim();
+    const secuencial = (docParts[2] || "000000001").trim();
+    try {
+      ticketAccessKey = generateAccessKey({
+        rucEmisor: emitter.ruc || EMITTER_INFO.ruc,
+        razonSocialEmisor: emitter.name || EMITTER_INFO.name,
+        dirMatriz: emitter.address || EMITTER_INFO.address,
+        estab,
+        ptoEmi,
+        secuencial,
+        fechaEmision: formattedDate,
+        cliente: {
+          razonSocial: data.client.name,
+          identificacion: data.client.ruc,
+        },
+        items: [],
+        formaPago: data.client.paymentMethod || "01"
+      });
+    } catch (e) {}
+  }
+
+  if (ticketAccessKey && ticketAccessKey.length === 49) {
     doc.setFontSize(6);
     doc.text('CLAVE DE ACCESO / AUTORIZACION:', 40, y, { align: 'center' });
     y += 4;
-    doc.text(data.accessKey, 40, y, { align: 'center', maxWidth: 75 });
+    doc.text(ticketAccessKey, 40, y, { align: 'center', maxWidth: 75 });
     
     // Add Barcode if available
     if (typeof document !== 'undefined') {
       try {
         const canvas = document.createElement('canvas');
-        JsBarcode(canvas, data.accessKey, { format: "CODE128", displayValue: false, height: 30, width: 1, margin: 0 });
+        JsBarcode(canvas, ticketAccessKey, { format: "CODE128", displayValue: false, height: 30, width: 1, margin: 0 });
         const barcodeData = canvas.toDataURL("image/png");
         y += 2;
         doc.addImage(barcodeData, 'PNG', 5, y, 70, 10);
@@ -786,8 +877,36 @@ export interface RetentionPDFData {
 
 function createRetentionPDFDoc(data: RetentionPDFData) {
   const doc = new jsPDF() as any;
-  const authNumber = data.accessKey || "0000000000000000000000000000000000000000000000000";
-  const displayNum = data.docNumber || "000-000-000000000";
+  let authNumber = (data.accessKey || "").trim();
+  if (!authNumber || /^0+$/.test(authNumber) || authNumber.length !== 49) {
+    const formattedDate = formatToDDMMYYYY(data.date);
+    const docParts = (data.docNumber || "001-100-000000001").split('-');
+    const estab = (docParts[0] || "001").trim();
+    const ptoEmi = (docParts[1] || "100").trim();
+    const secuencial = (docParts[2] || "000000001").trim();
+
+    try {
+      authNumber = generateRetentionAccessKey({
+        rucEmisor: data.emitter?.ruc || EMITTER_INFO.ruc,
+        razonSocialEmisor: data.emitter?.name || EMITTER_INFO.name,
+        dirMatriz: data.emitter?.address || EMITTER_INFO.address,
+        estab,
+        ptoEmi,
+        secuencial,
+        fechaEmision: formattedDate,
+        identificacion: data.client.ruc,
+        razonSocial: data.client.name,
+        numeroFactura: data.retenciones?.[0]?.numero || "001-100-000000001",
+        fechaFactura: data.retenciones?.[0]?.fechaEmision || formattedDate,
+        retenciones: []
+      });
+    } catch (e) {
+      console.error("Error generating fallback accessKey for Retention RIDE:", e);
+      authNumber = "0000000000000000000000000000000000000000000000000";
+    }
+  }
+
+  const displayNum = data.docNumber || "001-100-000000001";
   const isAutorizado = data.status?.trim().toLowerCase() === "autorizado";
 
   const emitter = {

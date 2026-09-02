@@ -13,6 +13,9 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "electron": "electron .",
+    "electron:build": "next build && node copy-standalone.js && electron-builder",
+    "electron:build:win": "next build && node copy-standalone.js && electron-builder --win",
+    "electron:build:linux": "next build && node copy-standalone.js && electron-builder --linux tar.gz zip",
     "dist": "node copy-standalone.js && electron-builder"
   },
   "dependencies": {
@@ -80,8 +83,9 @@
   "build": {
     "appId": "com.apminox.app",
     "productName": "Apm Inox",
+    "executableName": "apm-inox",
     "directories": {
-      "output": "dist4"
+      "output": "dist"
     },
     "icon": "public/APM INOX LOGO.png",
     "files": [
@@ -92,6 +96,39 @@
     ],
     "asarUnpack": [
       ".next/standalone/**/*"
-    ]
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Apm Inox"
+    },
+    "linux": {
+      "target": [
+        "deb",
+        "AppImage"
+      ],
+      "category": "Office",
+      "maintainer": "Apm Inox <alex@apminox.com>",
+      "synopsis": "Apm Inox Desktop Application",
+      "description": "Sistema de gestión y facturación Apm Inox para Linux Debian"
+    },
+    "deb": {
+      "priority": "optional",
+      "packageCategory": "utils",
+      "depends": [
+        "libnotify4",
+        "libxtst6",
+        "libnss3",
+        "libasound2",
+        "libgbm1"
+      ]
+    }
   }
 }

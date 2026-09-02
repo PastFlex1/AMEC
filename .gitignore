@@ -46,9 +46,8 @@ firestore-debug.log
 
 # Custom ignores
 debug.log
-dist2/
-dist3/
-dist4/
+dist/
+dist*/
 electron.log
 electron_err.log
 err.txt

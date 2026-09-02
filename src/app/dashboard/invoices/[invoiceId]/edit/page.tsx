@@ -256,17 +256,29 @@ export default function EditInvoicePage() {
     finally { setLoadingAction(null); }
   };
 
-  const handleSave = async (customStatus?: string, customAuthDate?: string, customAuthorizedXml?: string, customSriError?: string) => {
+  const handleSave = async (
+    customStatus?: string, 
+    customAuthDate?: string, 
+    customAuthorizedXml?: string, 
+    customSriError?: string,
+    customClaveAcceso?: string
+  ) => {
     if (!invoiceRef || isReadOnly) return;
+    
+    if (!clientData.name || !clientData.ruc) {
+      toast({ title: "Datos incompletos", description: "El nombre y la identificación del cliente son obligatorios.", variant: "destructive" });
+      return;
+    }
+    if (!taxConfig.regimen) {
+      toast({ title: "Régimen no configurado", description: "El régimen tributario del emisor no puede estar vacío.", variant: "destructive" });
+      return;
+    }
+
     const isSilent = customStatus !== undefined;
     if (!isSilent) setLoadingAction('save');
 
     if (!taxConfig || !taxConfig.ruc) {
       toast({ title: "Emisor no configurado", description: "Falta configurar los datos tributarios del emisor.", variant: "destructive" });
-      return;
-    }
-    if (!taxConfig.regimen) {
-      toast({ title: "Régimen no configurado", description: "El régimen tributario del emisor no puede estar vacío.", variant: "destructive" });
       return;
     }
 
@@ -303,6 +315,7 @@ export default function EditInvoicePage() {
       if (customAuthDate) updateData.authDate = customAuthDate;
       if (customAuthorizedXml) updateData.authorizedXml = customAuthorizedXml;
       if (customSriError !== undefined) updateData.sriError = customSriError;
+      if (customClaveAcceso) updateData.claveAcceso = customClaveAcceso;
 
       if ((customStatus === "Autorizado" || currentStatus === "Autorizado") && !invoice?.stockDeducted) {
         updateData.stockDeducted = true;
@@ -367,10 +380,7 @@ export default function EditInvoicePage() {
       });
 
       const res = await emitirFacturaAction(ncXml);
-      
-      if (!res.success) {
-        throw new Error(res.error || "El SRI rechazó la Nota de Crédito de anulación.");
-      }
+      if (!res.success) throw new Error(res.error);
 
       await updateDoc(invoiceRef, {
         status: "Anulada",
@@ -445,7 +455,7 @@ export default function EditInvoicePage() {
 
       const authDateStr = format(new Date(), "dd/MM/yyyy HH:mm:ss");
       
-      await handleSave("Autorizado", authDateStr, resAuth.autorizacion, "");
+      await handleSave("Autorizado", authDateStr, resAuth.autorizacion, "", resFirma.claveAcceso);
       toast({ title: "Factura Autorizada con éxito" });
 
     } catch (error: any) {
@@ -458,6 +468,11 @@ export default function EditInvoicePage() {
     await handleSave(currentStatus);
     setLoadingAction('pdf');
     try {
+      const extractedAccessKey = 
+        invoice?.claveAcceso || 
+        invoice?.accessKey || 
+        (invoice?.authorizedXml ? invoice.authorizedXml.match(/<numeroAutorizacion>(.*?)<\/numeroAutorizacion>/)?.[1] || invoice.authorizedXml.match(/<claveAcceso>(.*?)<\/claveAcceso>/)?.[1] : undefined);
+
       generateBillingPDF({
         title: "Factura",
         client: clientData,
@@ -472,11 +487,21 @@ export default function EditInvoicePage() {
         iva15: ivaCalculated,
         regimen: taxConfig.regimen,
         obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO",
+        emitter: {
+          name: taxConfig.razonSocial,
+          ruc: taxConfig.ruc,
+          address: taxConfig.dirMatriz,
+          phone: taxConfig.phone,
+          phones: taxConfig.phone,
+          email: taxConfig.email,
+          regimen: taxConfig.regimen,
+          obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO"
+        },
         deposit,
         balance,
         date: format(date, "dd/MM/yyyy"),
         docNumber: invoice?.invoiceNumber,
-        accessKey: invoice?.claveAcceso,
+        accessKey: extractedAccessKey,
         status: currentStatus, 
         time: authDate || undefined, 
         observations
@@ -488,6 +513,11 @@ export default function EditInvoicePage() {
     await handleSave(currentStatus);
     setLoadingAction('ticket');
     try {
+      const extractedAccessKey = 
+        invoice?.claveAcceso || 
+        invoice?.accessKey || 
+        (invoice?.authorizedXml ? invoice.authorizedXml.match(/<numeroAutorizacion>(.*?)<\/numeroAutorizacion>/)?.[1] || invoice.authorizedXml.match(/<claveAcceso>(.*?)<\/claveAcceso>/)?.[1] : undefined);
+
       generateThermalPDF({
         title: "Factura",
         client: clientData,
@@ -502,11 +532,21 @@ export default function EditInvoicePage() {
         iva15: ivaCalculated,
         regimen: taxConfig.regimen,
         obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO",
+        emitter: {
+          name: taxConfig.razonSocial,
+          ruc: taxConfig.ruc,
+          address: taxConfig.dirMatriz,
+          phone: taxConfig.phone,
+          phones: taxConfig.phone,
+          email: taxConfig.email,
+          regimen: taxConfig.regimen,
+          obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO"
+        },
         deposit,
         balance,
         date: format(date, "dd/MM/yyyy"),
         docNumber: invoice?.invoiceNumber,
-        accessKey: invoice?.claveAcceso,
+        accessKey: extractedAccessKey,
         status: currentStatus, 
         time: authDate || undefined, 
         observations
@@ -519,6 +559,11 @@ export default function EditInvoicePage() {
     await handleSave(currentStatus);
     setLoadingAction('mail');
     try {
+      const extractedAccessKey = 
+        invoice?.claveAcceso || 
+        invoice?.accessKey || 
+        (invoice?.authorizedXml ? invoice.authorizedXml.match(/<numeroAutorizacion>(.*?)<\/numeroAutorizacion>/)?.[1] || invoice.authorizedXml.match(/<claveAcceso>(.*?)<\/claveAcceso>/)?.[1] : undefined);
+
       const base64 = getBillingPDFBase64({
         title: "Factura",
         client: clientData,
@@ -533,11 +578,21 @@ export default function EditInvoicePage() {
         iva15: ivaCalculated,
         regimen: taxConfig.regimen,
         obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO",
+        emitter: {
+          name: taxConfig.razonSocial,
+          ruc: taxConfig.ruc,
+          address: taxConfig.dirMatriz,
+          phone: taxConfig.phone,
+          phones: taxConfig.phone,
+          email: taxConfig.email,
+          regimen: taxConfig.regimen,
+          obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO"
+        },
         deposit,
         balance,
         date: format(date, "dd/MM/yyyy"),
         docNumber: invoice?.invoiceNumber,
-        accessKey: invoice?.claveAcceso,
+        accessKey: extractedAccessKey,
         status: currentStatus,
         time: authDate || undefined,
         observations

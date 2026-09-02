@@ -31,6 +31,6 @@ export const DEFAULT_TAX_CONFIG: TaxConfig = {
   dirMatriz: "Figueroa Oe 4-14 y 25 de Mayo (a media cuadra del Obelisco de Cotocollao)",
   estab: "001",
   ptoEmi: "100",
-  phone: "025158093 - 0992769292 - 0989411821",
+  phone: "0992350548",
   email: "amec.marcando.diferencia@hotmail.com"
 };

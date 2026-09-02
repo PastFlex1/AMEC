@@ -204,6 +204,11 @@ export default function InvoicesPage() {
 
   const handleDownloadRIDE = (inv: any) => {
     try {
+      const extractedAccessKey = 
+        inv.claveAcceso || 
+        inv.accessKey || 
+        (inv.authorizedXml ? inv.authorizedXml.match(/<numeroAutorizacion>(.*?)<\/numeroAutorizacion>/)?.[1] || inv.authorizedXml.match(/<claveAcceso>(.*?)<\/claveAcceso>/)?.[1] : undefined);
+
       generateBillingPDF({
         title: "Factura",
         client: {
@@ -211,6 +216,7 @@ export default function InvoicesPage() {
           ruc: inv.clientData?.ruc || inv.customerRuc || "9999999999999",
           address: inv.clientData?.address || "S/N",
           email: inv.clientData?.email || "N/A",
+          phone: inv.clientData?.phone || inv.customerPhone || "N/A",
           paymentMethod: inv.clientData?.paymentMethod || "01",
           transferNumber: inv.clientData?.transferNumber
         },
@@ -225,9 +231,21 @@ export default function InvoicesPage() {
         iva15: inv.ivaCalculated !== undefined ? inv.ivaCalculated : 0,
         regimen: taxConfig.regimen,
         obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO",
+        emitter: {
+          name: taxConfig.razonSocial,
+          ruc: taxConfig.ruc,
+          address: taxConfig.dirMatriz,
+          phone: taxConfig.phone,
+          phones: taxConfig.phone,
+          email: taxConfig.email,
+          regimen: taxConfig.regimen,
+          obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO"
+        },
+        deposit: inv.deposit,
+        balance: inv.balance,
         date: formatDocDate(inv.date),
         docNumber: inv.invoiceNumber,
-        accessKey: inv.claveAcceso,
+        accessKey: extractedAccessKey,
         status: inv.status,
         time: inv.authDate,
         observations: inv.observations
@@ -240,6 +258,11 @@ export default function InvoicesPage() {
 
   const handlePrintTicket = (inv: any) => {
     try {
+      const extractedAccessKey = 
+        inv.claveAcceso || 
+        inv.accessKey || 
+        (inv.authorizedXml ? inv.authorizedXml.match(/<numeroAutorizacion>(.*?)<\/numeroAutorizacion>/)?.[1] || inv.authorizedXml.match(/<claveAcceso>(.*?)<\/claveAcceso>/)?.[1] : undefined);
+
       generateThermalPDF({
         title: "Factura",
         client: {
@@ -247,6 +270,7 @@ export default function InvoicesPage() {
           ruc: inv.clientData?.ruc || inv.customerRuc || "9999999999999",
           address: inv.clientData?.address || "S/N",
           email: inv.clientData?.email || "N/A",
+          phone: inv.clientData?.phone || inv.customerPhone || "N/A",
           paymentMethod: inv.clientData?.paymentMethod || "01",
           transferNumber: inv.clientData?.transferNumber
         },
@@ -261,9 +285,21 @@ export default function InvoicesPage() {
         iva15: inv.ivaCalculated !== undefined ? inv.ivaCalculated : 0,
         regimen: taxConfig.regimen,
         obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO",
+        emitter: {
+          name: taxConfig.razonSocial,
+          ruc: taxConfig.ruc,
+          address: taxConfig.dirMatriz,
+          phone: taxConfig.phone,
+          phones: taxConfig.phone,
+          email: taxConfig.email,
+          regimen: taxConfig.regimen,
+          obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO"
+        },
+        deposit: inv.deposit,
+        balance: inv.balance,
         date: formatDocDate(inv.date),
         docNumber: inv.invoiceNumber,
-        accessKey: inv.claveAcceso,
+        accessKey: extractedAccessKey,
         status: inv.status,
         time: inv.authDate,
         observations: inv.observations
@@ -292,33 +328,41 @@ export default function InvoicesPage() {
         fechaEmision: formatDocDate(inv.date),
         cliente: {
           razonSocial: inv.clientData?.name || inv.customerName || "CONSUMIDOR FINAL",
-          identificacion: inv.clientData?.ruc || inv.customerRuc || "9999999999999",
+          identificacion: inv.clientData?.identificacion || inv.clientData?.ruc || inv.customerRuc || "9999999999999",
           direccion: inv.clientData?.address || "S/N",
           email: inv.clientData?.email
         },
         items: (inv.items || []).map((item: any) => ({
           descripcion: item.description,
-          cantidad: item.quantity,
-          precioUnitario: item.unitPrice
+          cantidad: item.cantidad,
+          precioUnitario: item.unitPrice,
+          ivaRate: item.ivaRate
         })),
-        formaPago: inv.clientData?.paymentMethod || "01"
+        formaPago: inv.clientData?.paymentMethod || "01",
+        regimen: taxConfig.regimen,
+        obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO"
       });
-      downloadXML(xml, `Factura_${inv.invoiceNumber}.xml`);
-      toast({ title: "XML Generado" });
+      downloadXML(xml, `Factura_Autorizada_${inv.invoiceNumber}.xml`);
+      toast({ title: "XML Descargado" });
     } catch (e) {
-      toast({ title: "Error XML", variant: "destructive" });
+      toast({ title: "Error al generar XML", variant: "destructive" });
     }
   };
 
   const handleResendEmail = async (inv: any) => {
     const clientEmail = inv.clientData?.email;
     if (!clientEmail) {
-      toast({ title: "Sin Correo", description: "El cliente no tiene un email configurado.", variant: "destructive" });
+      toast({ title: "Email no registrado", description: "El cliente no tiene un correo asignado.", variant: "destructive" });
       return;
     }
 
     setSendingEmailId(inv.id);
     try {
+      const extractedAccessKey = 
+        inv.claveAcceso || 
+        inv.accessKey || 
+        (inv.authorizedXml ? inv.authorizedXml.match(/<numeroAutorizacion>(.*?)<\/numeroAutorizacion>/)?.[1] || inv.authorizedXml.match(/<claveAcceso>(.*?)<\/claveAcceso>/)?.[1] : undefined);
+
       const base64 = getBillingPDFBase64({
         title: "Factura",
         client: {
@@ -326,16 +370,36 @@ export default function InvoicesPage() {
           ruc: inv.clientData?.ruc || inv.customerRuc || "9999999999999",
           address: inv.clientData?.address || "S/N",
           email: clientEmail,
+          phone: inv.clientData?.phone || inv.customerPhone || "N/A",
           paymentMethod: inv.clientData?.paymentMethod || "01",
           transferNumber: inv.clientData?.transferNumber
         },
         items: inv.items || [],
         total: inv.total || 0,
-        subtotal: inv.total || 0,
-        iva: 0,
+        subtotal: inv.subtotalBase !== undefined ? inv.subtotalBase : (inv.total || 0),
+        iva: inv.ivaCalculated !== undefined ? inv.ivaCalculated : 0,
+        subtotal15: inv.subtotal15 !== undefined ? inv.subtotal15 : 0,
+        subtotal0: inv.subtotal0 !== undefined ? inv.subtotal0 : (inv.total || 0),
+        subtotalNoObjeto: inv.subtotalNoObjeto !== undefined ? inv.subtotalNoObjeto : 0,
+        subtotalExento: inv.subtotalExento !== undefined ? inv.subtotalExento : 0,
+        iva15: inv.ivaCalculated !== undefined ? inv.ivaCalculated : 0,
+        regimen: taxConfig.regimen,
+        obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO",
+        emitter: {
+          name: taxConfig.razonSocial,
+          ruc: taxConfig.ruc,
+          address: taxConfig.dirMatriz,
+          phone: taxConfig.phone,
+          phones: taxConfig.phone,
+          email: taxConfig.email,
+          regimen: taxConfig.regimen,
+          obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO"
+        },
+        deposit: inv.deposit,
+        balance: inv.balance,
         date: formatDocDate(inv.date),
         docNumber: inv.invoiceNumber,
-        accessKey: inv.claveAcceso,
+        accessKey: extractedAccessKey,
         status: inv.status,
         time: inv.authDate,
         observations: inv.observations

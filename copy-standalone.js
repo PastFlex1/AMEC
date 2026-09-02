@@ -30,6 +30,11 @@ if (fs.existsSync(standalonePath)) {
   
   // Copy .next/static folder
   copyRecursiveSync(path.join(__dirname, '.next', 'static'), destStatic);
+
+  // Copy .env if exists
+  if (fs.existsSync(path.join(__dirname, '.env'))) {
+    fs.copyFileSync(path.join(__dirname, '.env'), path.join(standalonePath, '.env'));
+  }
   
   console.log('Assets copied successfully.');
 } else {
