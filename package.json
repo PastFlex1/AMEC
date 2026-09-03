@@ -16,6 +16,7 @@
     "electron:build": "next build && node copy-standalone.js && electron-builder",
     "electron:build:win": "next build && node copy-standalone.js && electron-builder --win",
     "electron:build:linux": "next build && node copy-standalone.js && electron-builder --linux tar.gz zip",
+    "electron:deb": "node package-deb.js",
     "dist": "node copy-standalone.js && electron-builder"
   },
   "dependencies": {

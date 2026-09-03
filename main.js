@@ -4,6 +4,14 @@ const path = require("path");
 
 const fs = require("fs");
 
+// Compatibilidad con Linux / MiniOS / Debian (sesión Live como root o sin user namespaces)
+if (process.platform === 'linux') {
+  if ((process.getuid && process.getuid() === 0) || process.argv.includes('--no-sandbox')) {
+    app.commandLine.appendSwitch('no-sandbox');
+    app.commandLine.appendSwitch('disable-gpu-sandbox');
+  }
+}
+
 let mainWindow;
 let nextProcess;
 
@@ -88,6 +96,14 @@ function crearVentana() {
   });
 
   mainWindow.loadURL("http://127.0.0.1:3333");
+
+  mainWindow.webContents.on('did-fail-load', () => {
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.loadURL("http://127.0.0.1:3333");
+      }
+    }, 1000);
+  });
 }
 
 function limpiarProcesos() {
