@@ -413,22 +413,7 @@ export function getBillingPDFBase64(data: PDFData): string {
 }
 
 function createTicketPDFDoc(data: PDFData) {
-  // calculate height
-  const itemsHeight = data.items.reduce((acc, item) => {
-    // est 4mm per line, wrap after 40 chars
-    const textLines = Math.ceil(item.description.length / 40) || 1;
-    return acc + (textLines * 4) + 2;
-  }, 0);
-  
-  const height = 140 + itemsHeight + (data.observations ? 20 : 0) + (data.accessKey ? 20 : 0);
-  
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: [80, height]
-  });
-  
-  const displayNum = data.docNumber || "001-100-XXXXXXXXX";
+  const isFacturaDoc = data.title === "Factura";
   const emitter = data.emitter || {
     name: EMITTER_INFO.name,
     ruc: EMITTER_INFO.ruc,
@@ -437,125 +422,8 @@ function createTicketPDFDoc(data: PDFData) {
     email: EMITTER_INFO.email
   };
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.text('Apm Inox', 40, 10, { align: 'center' });
-  
-  doc.setFontSize(9);
-  doc.text(emitter.name, 40, 15, { align: 'center' });
-  
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.text(`RUC: ${emitter.ruc}`, 40, 20, { align: 'center' });
-  const addrLines = doc.splitTextToSize(emitter.address, 70);
-  doc.text(addrLines, 40, 25, { align: 'center' });
-  const addrHeight = addrLines.length * 4;
-  
-  doc.text(`Telf: ${emitter.phones || emitter.phone || ""}`, 40, 25 + addrHeight, { align: 'center' });
-  
-  let y = 28 + addrHeight;
-  
-  doc.setLineWidth(0.3);
-  (doc as any).setLineDash([1, 1], 0);
-  doc.line(5, y, 75, y);
-  (doc as any).setLineDash([], 0);
-  
-  y += 6;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text(data.title.toUpperCase(), 40, y, { align: 'center' });
-  
-  y += 5;
-  doc.setFontSize(9);
-  doc.text(`No: ${displayNum}`, 40, y, { align: 'center' });
-  
-  y += 7;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.text(`Fecha: ${data.date}`, 5, y);
-  y += 5;
-  doc.text(`Cliente: ${data.client.name}`, 5, y, { maxWidth: 70 });
-  y += 5;
-  doc.text(`RUC/CI: ${data.client.ruc}`, 5, y);
-  y += 5;
-  
-  (doc as any).setLineDash([1, 1], 0);
-  doc.line(5, y, 75, y);
-  (doc as any).setLineDash([], 0);
-  y += 5;
-  
-  doc.setFont('helvetica', 'bold');
-  doc.text('CANT', 5, y);
-  doc.text('DESCRIPCION', 18, y);
-  doc.text('TOTAL', 75, y, { align: 'right' });
-  y += 2;
-  
-  (doc as any).setLineDash([1, 1], 0);
-  doc.line(5, y, 75, y);
-  (doc as any).setLineDash([], 0);
-  y += 5;
-  
-  doc.setFont('helvetica', 'normal');
-  data.items.forEach((item) => {
-    const qty = safe(item.quantity);
-    const total = safe(item.quantity * item.unitPrice);
-    
-    doc.text(qty.toString(), 5, y);
-    doc.text(`$${total.toFixed(2)}`, 75, y, { align: 'right' });
-    
-    // adjust y based on text length of description
-    const textLines = doc.splitTextToSize(item.description, 40);
-    doc.text(textLines, 18, y);
-    y += (textLines.length * 4) + 2;
-  });
-  
-  (doc as any).setLineDash([1, 1], 0);
-  doc.line(5, y, 75, y);
-  (doc as any).setLineDash([], 0);
-  y += 6;
-  
-  doc.setFont('helvetica', 'normal');
-  doc.text('SUBTOTAL:', 35, y);
-  doc.text(`$${safe(data.subtotal !== undefined ? data.subtotal : data.total).toFixed(2)}`, 75, y, { align: 'right' });
-  y += 5;
-  
-  const ivaVal = data.iva15 !== undefined ? data.iva15 : 0;
-  if (ivaVal > 0) {
-    doc.text('IVA 15%:', 35, y);
-  } else {
-    doc.text('IVA 0%:', 35, y);
-  }
-  doc.text(`$${safe(ivaVal).toFixed(2)}`, 75, y, { align: 'right' });
-  y += 6;
-  
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('TOTAL:', 35, y);
-  doc.text(`$${safe(data.total).toFixed(2)}`, 75, y, { align: 'right' });
-  y += 6;
-  
-  if (safe(data.deposit) > 0) {
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text('ABONADO:', 35, y);
-    doc.text(`$${safe(data.deposit).toFixed(2)}`, 75, y, { align: 'right' });
-    y += 5;
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text('SALDO:', 35, y);
-    doc.text(`$${safe(data.balance).toFixed(2)}`, 75, y, { align: 'right' });
-    y += 6;
-  }
-  
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  const payDesc = PAYMENT_MAP[data.client.paymentMethod || "01"] || "EFECTIVO";
-  const payLines = doc.splitTextToSize(`Forma de pago: ${payDesc}`, 70);
-  doc.text(payLines, 40, y, { align: 'center' });
-  y += payLines.length * 4 + 2;
-  
+  // Pre-calculate access key if factura
   let ticketAccessKey = (data.accessKey || "").trim();
-  const isFacturaDoc = data.title === "Factura";
   if (isFacturaDoc && (!ticketAccessKey || /^0+$/.test(ticketAccessKey) || ticketAccessKey.length !== 49)) {
     const formattedDate = formatToDDMMYYYY(data.date);
     const docParts = (data.docNumber || "001-100-000000001").split('-');
@@ -581,38 +449,198 @@ function createTicketPDFDoc(data: PDFData) {
     } catch (e) {}
   }
 
-  if (ticketAccessKey && ticketAccessKey.length === 49) {
+  // Calculate items height with realistic wrapping on 36mm description column
+  const itemsHeight = data.items.reduce((acc, item) => {
+    const textLines = Math.ceil((item.description || "").length / 28) || 1;
+    return acc + (textLines * 4) + 2.5;
+  }, 0);
+
+  // Dynamic height calculation
+  const hasAccessKey = Boolean(ticketAccessKey && ticketAccessKey.length === 49);
+  const hasDeposit = safe(data.deposit) > 0;
+  const height = Math.max(
+    110,
+    135 + itemsHeight + (data.observations ? 18 : 0) + (hasAccessKey ? 32 : 0) + (hasDeposit ? 14 : 0)
+  );
+
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: [76, height]
+  });
+
+  const displayNum = data.docNumber || "001-100-XXXXXXXXX";
+  const centerX = 38;
+  const leftX = 4;
+  const rightX = 72;
+
+  // Header Emisor
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('Apm Inox', centerX, 10, { align: 'center' });
+
+  doc.setFontSize(8.5);
+  doc.text(emitter.name, centerX, 15, { align: 'center' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text(`RUC: ${emitter.ruc}`, centerX, 19.5, { align: 'center' });
+
+  const addrLines = doc.splitTextToSize(emitter.address, 68);
+  doc.text(addrLines, centerX, 24, { align: 'center' });
+  const addrHeight = addrLines.length * 3.5;
+
+  doc.text(`Telf: ${emitter.phones || emitter.phone || ""}`, centerX, 24 + addrHeight, { align: 'center' });
+
+  let y = 27 + addrHeight;
+
+  // Line divider
+  doc.setLineWidth(0.3);
+  (doc as any).setLineDash([1, 1], 0);
+  doc.line(leftX, y, rightX, y);
+  (doc as any).setLineDash([], 0);
+
+  // Document details
+  y += 5.5;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text(data.title.toUpperCase(), centerX, y, { align: 'center' });
+
+  y += 4.5;
+  doc.setFontSize(8.5);
+  doc.text(`No: ${displayNum}`, centerX, y, { align: 'center' });
+
+  // Client and Date info
+  y += 6;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.text(`Fecha: ${data.date}`, leftX, y);
+  y += 4.5;
+  const clientLines = doc.splitTextToSize(`Cliente: ${data.client.name}`, 68);
+  doc.text(clientLines, leftX, y);
+  y += clientLines.length * 3.5;
+  doc.text(`RUC/CI: ${data.client.ruc}`, leftX, y);
+  y += 4.5;
+
+  (doc as any).setLineDash([1, 1], 0);
+  doc.line(leftX, y, rightX, y);
+  (doc as any).setLineDash([], 0);
+  y += 4.5;
+
+  // Table header
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.text('CANT', leftX, y);
+  doc.text('DESCRIPCIÓN', 16, y);
+  doc.text('TOTAL', rightX, y, { align: 'right' });
+  y += 2;
+
+  (doc as any).setLineDash([1, 1], 0);
+  doc.line(leftX, y, rightX, y);
+  (doc as any).setLineDash([], 0);
+  y += 4.5;
+
+  // Items
+  doc.setFont('helvetica', 'normal');
+  data.items.forEach((item) => {
+    const qty = safe(item.quantity);
+    const total = safe(item.quantity * item.unitPrice);
+
+    doc.text(qty.toString(), leftX, y);
+    doc.text(`$${total.toFixed(2)}`, rightX, y, { align: 'right' });
+
+    // adjust y based on text length of description
+    const textLines = doc.splitTextToSize(item.description || "", 36);
+    doc.text(textLines, 16, y);
+    y += (textLines.length * 3.8) + 1.5;
+  });
+
+  (doc as any).setLineDash([1, 1], 0);
+  doc.line(leftX, y, rightX, y);
+  (doc as any).setLineDash([], 0);
+  y += 5.5;
+
+  // Totals
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text('SUBTOTAL:', 30, y);
+  doc.text(`$${safe(data.subtotal !== undefined ? data.subtotal : data.total).toFixed(2)}`, rightX, y, { align: 'right' });
+  y += 4.5;
+
+  const ivaVal = data.iva15 !== undefined ? data.iva15 : 0;
+  if (ivaVal > 0) {
+    doc.text('IVA 15%:', 30, y);
+  } else {
+    doc.text('IVA 0%:', 30, y);
+  }
+  doc.text(`$${safe(ivaVal).toFixed(2)}`, rightX, y, { align: 'right' });
+  y += 5.5;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text('TOTAL:', 30, y);
+  doc.text(`$${safe(data.total).toFixed(2)}`, rightX, y, { align: 'right' });
+  y += 5.5;
+
+  if (hasDeposit) {
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text('ABONADO:', 30, y);
+    doc.text(`$${safe(data.deposit).toFixed(2)}`, rightX, y, { align: 'right' });
+    y += 4.5;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('SALDO:', 30, y);
+    doc.text(`$${safe(data.balance).toFixed(2)}`, rightX, y, { align: 'right' });
+    y += 5.5;
+  }
+
+  // Payment method
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  const payDesc = PAYMENT_MAP[data.client.paymentMethod || "01"] || "EFECTIVO";
+  const payLines = doc.splitTextToSize(`Forma de pago: ${payDesc}`, 68);
+  doc.text(payLines, centerX, y, { align: 'center' });
+  y += payLines.length * 3.5 + 3;
+
+  // Clave de Acceso y Barcode SRI
+  if (hasAccessKey) {
     doc.setFontSize(6);
-    doc.text('CLAVE DE ACCESO / AUTORIZACION:', 40, y, { align: 'center' });
-    y += 4;
-    doc.text(ticketAccessKey, 40, y, { align: 'center', maxWidth: 75 });
-    
-    // Add Barcode if available
+    doc.text('CLAVE DE ACCESO / AUTORIZACION:', centerX, y, { align: 'center' });
+    y += 3.5;
+    doc.text(ticketAccessKey, centerX, y, { align: 'center', maxWidth: 68 });
+
     if (typeof document !== 'undefined') {
       try {
         const canvas = document.createElement('canvas');
-        JsBarcode(canvas, ticketAccessKey, { format: "CODE128", displayValue: false, height: 30, width: 1, margin: 0 });
+        JsBarcode(canvas, ticketAccessKey, { format: "CODE128", displayValue: false, height: 28, width: 1, margin: 0 });
         const barcodeData = canvas.toDataURL("image/png");
         y += 2;
-        doc.addImage(barcodeData, 'PNG', 5, y, 70, 10);
-        y += 12;
-      } catch (e) {}
+        const barcodeW = 64;
+        const barcodeX = (76 - barcodeW) / 2;
+        doc.addImage(barcodeData, 'PNG', barcodeX, y, barcodeW, 9);
+        y += 11;
+      } catch (e) {
+        y += 6;
+      }
     } else {
-        y += 8;
+      y += 6;
     }
   }
-  
+
+  // Observations
   if (data.observations) {
     doc.setFontSize(7);
-    const obsLines = doc.splitTextToSize(`Notas: ${data.observations}`, 70);
-    doc.text(obsLines, 40, y, { align: 'center' });
-    y += obsLines.length * 4 + 2;
+    const obsLines = doc.splitTextToSize(`Notas: ${data.observations}`, 68);
+    doc.text(obsLines, centerX, y, { align: 'center' });
+    y += obsLines.length * 3.5 + 3;
   }
 
+  // Footer
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
-  doc.text('GRACIAS POR SU COMPRA', 40, y, { align: 'center' });
-  
+  doc.text('GRACIAS POR SU COMPRA', centerX, y, { align: 'center' });
+
   return doc;
 }
 
