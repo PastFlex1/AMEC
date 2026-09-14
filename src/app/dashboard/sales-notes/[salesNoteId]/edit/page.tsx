@@ -308,7 +308,7 @@ export default function EditSalesNotePage() {
                     onChange={(e) => {
                       const val = e.target.value.replace(/\D/g, '');
                       setClientData({...clientData, ruc: val});
-                      if (val.length === 10) fetchCedulaData(val, (data) => setClientData(prev => ({
+                      if (val.length === 10 || val.length === 13) fetchCedulaData(val, (data) => setClientData(prev => ({
                         ...prev, 
                         name: data.name || prev.name,
                         address: data.address || prev.address,

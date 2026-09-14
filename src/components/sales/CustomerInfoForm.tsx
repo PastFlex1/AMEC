@@ -62,7 +62,7 @@ export function CustomerInfoForm({
               onChange={(e) => {
                 const val = e.target.value.replace(/\D/g, '');
                 setClientData({...clientData, ruc: val});
-                if (val.length === 10) {
+                if (val.length === 10 || val.length === 13) {
                   fetchCedulaData(val, (data) => setClientData({
                     ...clientData, 
                     ruc: val,

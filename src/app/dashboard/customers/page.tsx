@@ -165,7 +165,7 @@ export default function CustomersPage() {
                     onChange={(e) => {
                       const val = e.target.value.replace(/\D/g, '');
                       setNewCustomer({...newCustomer, ruc: val});
-                      if (val.length === 10) {
+                      if (val.length === 10 || val.length === 13) {
                         fetchCedulaData(val, (data) => setNewCustomer(prev => ({
                           ...prev, 
                           name: data.name || prev.name, 

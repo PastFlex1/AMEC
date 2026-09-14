@@ -8,6 +8,7 @@ export interface CustomerData {
   address?: string;
   email?: string;
   phone?: string;
+  isExistingCustomer?: boolean;
 }
 
 export function useCedulaSearch() {
@@ -16,47 +17,72 @@ export function useCedulaSearch() {
   const [isSearchingCedula, setIsSearchingCedula] = useState(false);
 
   const fetchCedulaData = async (cedula: string, onFound: (data: CustomerData) => void) => {
-    if (cedula.length !== 10) return;
+    const cleanId = cedula.replace(/\D/g, '');
+    if (cleanId.length !== 10 && cleanId.length !== 13) return;
     setIsSearchingCedula(true);
     try {
+      // 1. Verificar si ya existe en la base de datos (directorio de clientes)
       if (db) {
-        const q = query(collection(db, "customers"), where("ruc", "==", cedula));
-        const snap = await getDocs(q);
+        const candidateRucs = [cleanId];
+        if (cleanId.length === 10) {
+          candidateRucs.push(`${cleanId}001`);
+        } else if (cleanId.length === 13 && cleanId.endsWith('001')) {
+          candidateRucs.push(cleanId.slice(0, 10));
+        }
+
+        let snap = await getDocs(query(collection(db, "customers"), where("ruc", "in", candidateRucs)));
+        
+        // Búsqueda alternativa por campos 'identification' o 'cedula' si 'ruc' estuviera vacío
+        if (snap.empty) {
+          try {
+            const snapAlt = await getDocs(query(collection(db, "customers"), where("identification", "in", candidateRucs)));
+            if (!snapAlt.empty) snap = snapAlt;
+          } catch {}
+        }
+        if (snap.empty) {
+          try {
+            const snapCed = await getDocs(query(collection(db, "customers"), where("cedula", "in", candidateRucs)));
+            if (!snapCed.empty) snap = snapCed;
+          } catch {}
+        }
+
+        // Si ya está registrado en el sistema, cargar toda la información de la BD y NO llamar al endpoint
         if (!snap.empty) {
           const data = snap.docs[0].data();
           onFound({
-            name: data.name || "",
-            ...(data.address && { address: data.address }),
-            ...(data.email && { email: data.email }),
-            ...(data.phone && { phone: data.phone })
+            name: data.name || data.razonSocial || data.nombre || "",
+            address: data.address || data.direccion || "",
+            email: data.email || data.correo || "",
+            phone: data.phone || data.telefono || "",
+            isExistingCustomer: true
           });
-          toast({ title: "Cliente encontrado", description: "Datos cargados desde su directorio." });
+          toast({ 
+            title: "Cliente encontrado", 
+            description: "Datos cargados desde su directorio local." 
+          });
           setIsSearchingCedula(false);
-          return;
+          return; // Retorno inmediato: NO consulta el endpoint del SRI
         }
       }
 
-      const proxyUrl = 'https://infoplacas.herokuapp.com/';
-      const targetUrl = 'https://si.secap.gob.ec/sisecap/logeo_web/json/busca_persona_registro_civil.php';
-      
-      const response = await fetch(proxyUrl + targetUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ documento: cedula, tipo: '1' })
-      });
+      // 2. Si NO está registrado en la base de datos (cliente nuevo): consultar endpoint del SRI
+      const response = await fetch(`/api/cedula?identificacion=${encodeURIComponent(cleanId)}`);
 
       if (response.ok) {
-        const text = await response.text();
-        if (text) {
-          const data = JSON.parse(text);
-          if (data && data.nombreCompleto) {
-            onFound({ name: data.nombreCompleto });
-            toast({ title: "Datos del Registro Civil", description: "Nombre autocompletado con éxito." });
-          }
+        const data = await response.json();
+        if (data && data.success && data.nombre) {
+          onFound({ 
+            name: data.nombre,
+            isExistingCustomer: false 
+          });
+          toast({ 
+            title: "Cliente nuevo (SRI)", 
+            description: "Nombre autocompletado con éxito desde el SRI." 
+          });
         }
       }
     } catch (error) {
-      console.error("Error al buscar cédula:", error);
+      console.error("Error al buscar identificación:", error);
     } finally {
       setIsSearchingCedula(false);
     }
