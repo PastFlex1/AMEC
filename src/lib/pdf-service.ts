@@ -644,11 +644,33 @@ function createTicketPDFDoc(data: PDFData) {
   return doc;
 }
 
-export function generateThermalPDF(data: PDFData) {
+export async function generateThermalPDF(data: PDFData) {
   if (typeof window === 'undefined') return;
+
+  // 1. Intentar impresion nativa directa por USB en Linux (ESC/POS directo a /dev/usb/lp*)
+  try {
+    const res = await fetch('/api/thermal-print', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success) {
+        console.log('Ticket impreso nativamente:', json.message);
+        return { success: true, native: true, method: json.method };
+      }
+    }
+  } catch (err) {
+    console.warn('Fallo comunicacion con endpoint de impresion nativa:', err);
+  }
+
+  // 2. Fallback: Si no hay impresora directa conectada, abrir visor PDF ajustado a 76 mm
   const doc = createTicketPDFDoc(data);
   doc.autoPrint();
   window.open(doc.output('bloburl'), '_blank');
+  return { success: true, native: false };
 }
 
 export function generateMonthlyReportPDF(data: ReportData) {
