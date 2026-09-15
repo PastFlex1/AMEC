@@ -4,7 +4,7 @@ import { exec } from 'child_process';
 import util from 'util';
 import path from 'path';
 import os from 'os';
-import { buildTicketESCPOS } from '@/lib/escpos-service';
+import { buildPlainTextTMU220, buildTicketTMU220Buffer } from '@/lib/escpos-service';
 
 const execAsync = util.promisify(exec);
 
@@ -21,15 +21,31 @@ const POSSIBLE_LINUX_DEVICES = [
 
 export async function POST(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const format = searchParams.get('format');
     const data = await request.json();
+
     if (!data) {
-      return NextResponse.json({ success: false, message: 'Datos incompletos' }, { status: 400 });
+      return NextResponse.json({ success: false, message: 'Datos requeridos' }, { status: 400 });
     }
 
-    // Generar buffer binario ESC/POS
-    const buffer = buildTicketESCPOS(data);
+    // 1. Si se solicita específicamente en text/plain (para Python, terminal, o pruebas)
+    if (format === 'text' || request.headers.get('accept')?.includes('text/plain')) {
+      const plainText = buildPlainTextTMU220(data);
+      return new Response(plainText, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Disposition': 'inline; filename="ticket_tmu220.txt"'
+        }
+      });
+    }
 
-    // 1. Detección de dispositivos directos en Linux (/dev/usb/lp*)
+    // 2. Generar buffer nativo para Epson TM-U220
+    const buffer = buildTicketTMU220Buffer(data);
+    const plainText = buildPlainTextTMU220(data);
+
+    // 3. En Linux Debian / MiniOS: Intentar envío directo por USB o CUPS
     if (process.platform === 'linux') {
       let targetDevice = '';
       for (const dev of POSSIBLE_LINUX_DEVICES) {
@@ -41,24 +57,24 @@ export async function POST(request: Request) {
 
       if (targetDevice) {
         try {
-          // Intentar escritura directa al dispositivo USB
+          // Escritura directa al puerto de la TM-U220
           fs.writeFileSync(targetDevice, buffer);
           return NextResponse.json({
             success: true,
             method: 'direct_device',
             device: targetDevice,
-            message: `Ticket impreso directamente en ${targetDevice}`
+            message: `Ticket enviado en texto nativo a ${targetDevice} (Epson TM-U220)`
           });
         } catch (writeErr: any) {
           console.warn(`Error al escribir directo en ${targetDevice}:`, writeErr?.message);
-          
-          // Si es error de permisos (EACCES), intentar enviar mediante pipe/cat con permisos
+
+          // Alternativa con cat / pipe
           try {
-            const tempFilePath = path.join(os.tmpdir(), `ticket_${Date.now()}.bin`);
-            fs.writeFileSync(tempFilePath, buffer);
-            await execAsync(`cat "${tempFilePath}" > "${targetDevice}"`);
-            try { fs.unlinkSync(tempFilePath); } catch (e) {}
-            
+            const tempFile = path.join(os.tmpdir(), `tmu220_${Date.now()}.txt`);
+            fs.writeFileSync(tempFile, buffer);
+            await execAsync(`cat "${tempFile}" > "${targetDevice}"`);
+            try { fs.unlinkSync(tempFile); } catch (e) {}
+
             return NextResponse.json({
               success: true,
               method: 'cat_device',
@@ -66,36 +82,35 @@ export async function POST(request: Request) {
               message: `Ticket enviado a ${targetDevice}`
             });
           } catch (catErr: any) {
-            console.warn(`Fallo cat a ${targetDevice}, intentando CUPS raw...`, catErr?.message);
+            console.warn(`Error con cat a ${targetDevice}:`, catErr?.message);
           }
         }
       }
 
-      // 2. Intentar a través de CUPS en modo RAW (lp -o raw)
+      // Intentar vía comando lp en modo RAW
       try {
-        const tempFilePath = path.join(os.tmpdir(), `ticket_cups_${Date.now()}.bin`);
-        fs.writeFileSync(tempFilePath, buffer);
-        
-        // Ejecutar lp -o raw
-        const { stdout } = await execAsync(`lp -o raw "${tempFilePath}"`);
-        try { fs.unlinkSync(tempFilePath); } catch (e) {}
+        const tempFile = path.join(os.tmpdir(), `tmu220_cups_${Date.now()}.txt`);
+        fs.writeFileSync(tempFile, buffer);
+        const { stdout } = await execAsync(`lp -o raw "${tempFile}"`);
+        try { fs.unlinkSync(tempFile); } catch (e) {}
 
         return NextResponse.json({
           success: true,
           method: 'cups_raw',
           output: stdout.trim(),
-          message: 'Ticket enviado a través de CUPS (modo raw)'
+          message: 'Ticket enviado a Epson TM-U220 vía CUPS (modo raw)'
         });
       } catch (cupsErr: any) {
-        console.warn('Fallo impresión por CUPS raw:', cupsErr?.message);
+        console.warn('Fallo impresión por lp raw:', cupsErr?.message);
       }
     }
 
-    // Si no es Linux o no se detectó el dispositivo físico
+    // Si no se pudo enviar directamente al dispositivo, devolver el texto plano para que el cliente lo use
     return NextResponse.json({
       success: false,
       fallback: true,
-      message: 'No se detectó impresora térmica en /dev/usb/lp* o no hay soporte en este entorno.'
+      plainText,
+      message: 'No se detectó el puerto /dev/usb/lp*. Se proporciona texto plano para impresión alternativa.'
     });
 
   } catch (error: any) {
@@ -103,7 +118,14 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: false,
       fallback: true,
-      error: error?.message || 'Error interno al procesar impresión térmica'
+      error: error?.message || 'Error al procesar ticket para TM-U220'
     }, { status: 500 });
   }
+}
+
+export async function GET(request: Request) {
+  return new Response('Endpoint activo. Envía POST con los datos de la factura/nota para imprimir en Epson TM-U220.', {
+    status: 200,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+  });
 }

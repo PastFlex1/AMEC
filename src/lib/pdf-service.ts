@@ -644,10 +644,69 @@ function createTicketPDFDoc(data: PDFData) {
   return doc;
 }
 
+export function printPlainTextIframe(text: string) {
+  if (typeof document === 'undefined') return;
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow?.document;
+  if (!doc) return;
+
+  doc.open();
+  doc.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Ticket Epson TM-U220</title>
+        <style>
+          @page {
+            size: 76mm auto;
+            margin: 0;
+          }
+          body {
+            margin: 0;
+            padding: 2mm 0;
+            width: 76mm;
+            background: #fff;
+            color: #000;
+          }
+          pre {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            line-height: 1.15;
+            margin: 0;
+            white-space: pre;
+          }
+        </style>
+      </head>
+      <body>
+        <pre>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+      </body>
+    </html>
+  `);
+  doc.close();
+
+  setTimeout(() => {
+    iframe.contentWindow?.focus();
+    iframe.contentWindow?.print();
+    setTimeout(() => {
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe);
+      }
+    }, 2000);
+  }, 300);
+}
+
 export async function generateThermalPDF(data: PDFData) {
   if (typeof window === 'undefined') return;
 
-  // 1. Intentar impresion nativa directa por USB en Linux (ESC/POS directo a /dev/usb/lp*)
+  // 1. Intentar impresion nativa directa por USB en Linux para Epson TM-U220
   try {
     const res = await fetch('/api/thermal-print', {
       method: 'POST',
@@ -658,15 +717,20 @@ export async function generateThermalPDF(data: PDFData) {
     if (res.ok) {
       const json = await res.json();
       if (json.success) {
-        console.log('Ticket impreso nativamente:', json.message);
+        console.log('Ticket impreso nativamente en TM-U220:', json.message);
         return { success: true, native: true, method: json.method };
+      } else if (json.plainText) {
+        // Si no se pudo escribir directo a /dev/usb/lp*, imprimir el texto plano en el navegador sin PDF!
+        console.log('Imprimiendo texto plano en navegador...');
+        printPlainTextIframe(json.plainText);
+        return { success: true, native: true, method: 'iframe_text' };
       }
     }
   } catch (err) {
     console.warn('Fallo comunicacion con endpoint de impresion nativa:', err);
   }
 
-  // 2. Fallback: Si no hay impresora directa conectada, abrir visor PDF ajustado a 76 mm
+  // 2. Fallback de emergencia: abrir visor PDF ajustado a 76 mm
   const doc = createTicketPDFDoc(data);
   doc.autoPrint();
   window.open(doc.output('bloburl'), '_blank');
