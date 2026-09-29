@@ -144,8 +144,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </Sidebar>
 
       <SidebarInset className="bg-[#f8fafc] flex flex-col min-w-0">
-        <header className="h-16 sticky top-0 z-40 flex items-center justify-between px-6 border-b border-slate-100 bg-white/80 backdrop-blur-xl">
-          <div className="flex items-center gap-4">
+        <header className="h-16 sticky top-0 z-40 flex items-center justify-between px-4 md:px-6 border-b border-slate-100 bg-white/80 backdrop-blur-xl">
+          <div className="flex items-center gap-2 md:gap-4">
             <SidebarTrigger className="h-9 w-9 border border-slate-200 bg-white shadow-sm hover:bg-slate-50 rounded-lg text-slate-600 transition-all" />
             <div className="flex flex-col">
               <div className="text-sm font-black text-slate-900 leading-none mb-0.5">
@@ -162,7 +162,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <main className="flex-1 p-6 md:p-10 max-w-7xl mx-auto w-full">
+        <main className="flex-1 p-4 md:p-10 max-w-7xl mx-auto w-full min-w-0">
           {children}
         </main>
         

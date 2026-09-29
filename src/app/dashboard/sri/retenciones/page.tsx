@@ -688,7 +688,7 @@ export default function RetencionesPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)} className="w-full">
-        <TabsList className="grid grid-cols-3 w-full md:w-[500px] bg-slate-100 p-1 rounded-2xl">
+        <TabsList className="flex flex-col md:grid md:grid-cols-3 h-auto md:h-11 w-full md:w-[500px] bg-slate-100 p-1 rounded-2xl gap-1 md:gap-0">
           <TabsTrigger value="facturas" className="rounded-xl font-bold text-xs md:text-sm">
             1. Facturas Autorizadas
           </TabsTrigger>

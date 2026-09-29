@@ -185,7 +185,7 @@ export default function InventoryIntakePage() {
                       <span className="truncate">{selectedProduct ? selectedProduct.name : "Seleccionar producto..."}</span>
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="p-0 w-[300px] md:w-[400px]" align="start">
+                  <PopoverContent className="p-0 w-[90vw] md:w-[400px]" align="start">
                     <div className="p-2 border-b">
                       <Input 
                         placeholder="Buscar producto por nombre..." 

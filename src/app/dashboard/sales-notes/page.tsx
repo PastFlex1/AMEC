@@ -64,7 +64,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, deleteDoc, doc, updateDoc, serverTimestamp, addDoc, query, orderBy, limit } from "firebase/firestore";
+import { collection, deleteDoc, doc, updateDoc, serverTimestamp, addDoc, query, orderBy, limit, increment } from "firebase/firestore";
 import { syncDailyCashClosing } from "@/lib/cash-register-service";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
@@ -254,7 +254,23 @@ export default function SalesNotesPage() {
     const note = notes?.find((n: any) => n.id === noteToDelete);
     deleteDoc(doc(db, "salesNotes", noteToDelete))
       .then(async () => {
-        toast({ title: "Nota eliminada", description: "El registro interno ha sido removido definitivamente." });
+        // Restaurar el stock de los productos
+        if (note?.items && note.items.length > 0) {
+          for (const item of note.items) {
+            if (item.productId) {
+              try {
+                const qtyToReturn = Number(item.quantity || item.cantidad || 1);
+                await updateDoc(doc(db, "products", item.productId), {
+                  stock: increment(qtyToReturn)
+                });
+              } catch (err) {
+                console.error("Error al restaurar stock del producto:", item.productId, err);
+              }
+            }
+          }
+        }
+
+        toast({ title: "Nota eliminada", description: "El registro interno ha sido removido y el stock devuelto." });
         
         const noteDate = note?.date ? (note.date.toDate ? note.date.toDate() : new Date(note.date)) : new Date();
         const dateString = format(noteDate, "yyyy-MM-dd");

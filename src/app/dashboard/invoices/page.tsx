@@ -67,7 +67,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, doc, deleteDoc, query, orderBy, updateDoc, serverTimestamp, addDoc, getDoc, limit } from "firebase/firestore";
+import { collection, doc, deleteDoc, query, orderBy, updateDoc, serverTimestamp, addDoc, getDoc, limit, increment } from "firebase/firestore";
 import { syncDailyCashClosing } from "@/lib/cash-register-service";
 import { DEFAULT_TAX_CONFIG, TaxConfig } from "@/lib/config-helper";
 import { format, parseISO } from "date-fns";
@@ -433,9 +433,25 @@ export default function InvoicesPage() {
 
   const handleDelete = () => {
     if (!db || !invoiceToDelete) return;
+    const invoice = invoices?.find((i: any) => i.id === invoiceToDelete);
     deleteDoc(doc(db, "invoices", invoiceToDelete))
-      .then(() => {
-        toast({ title: "Factura eliminada" });
+      .then(async () => {
+        // Restaurar el stock de los productos si la factura fue eliminada
+        if (invoice?.items && invoice.items.length > 0) {
+          for (const item of invoice.items) {
+            if (item.productId) {
+              try {
+                const qtyToReturn = Number(item.cantidad || item.quantity || 1);
+                await updateDoc(doc(db, "products", item.productId), {
+                  stock: increment(qtyToReturn)
+                });
+              } catch (err) {
+                console.error("Error al restaurar stock del producto:", item.productId, err);
+              }
+            }
+          }
+        }
+        toast({ title: "Factura eliminada", description: "Documento borrado y stock devuelto al inventario." });
         setInvoiceToDelete(null);
       })
       .catch(() => {
@@ -484,9 +500,25 @@ export default function InvoicesPage() {
         creditNoteXml: res.autorizacion
       });
 
+      // Restaurar el stock de los productos
+      if (invoiceToAnnul.items && invoiceToAnnul.items.length > 0) {
+        for (const item of invoiceToAnnul.items) {
+          if (item.productId) {
+            try {
+              const qtyToReturn = Number(item.cantidad || item.quantity || 1);
+              await updateDoc(doc(db, "products", item.productId), {
+                stock: increment(qtyToReturn)
+              });
+            } catch (err) {
+              console.error("Error al restaurar stock del producto:", item.productId, err);
+            }
+          }
+        }
+      }
+
       toast({ 
         title: "Factura Anulada Legalmente", 
-        description: "Se ha procesado y autorizado la Nota de Crédito con el SRI." 
+        description: "Se ha procesado la Nota de Crédito y se ha devuelto el stock al inventario." 
       });
       
       const invoiceDate = invoiceToAnnul.date ? (invoiceToAnnul.date.toDate ? invoiceToAnnul.date.toDate() : new Date(invoiceToAnnul.date)) : new Date();

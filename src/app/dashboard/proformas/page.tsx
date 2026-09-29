@@ -526,7 +526,7 @@ export default function ProformasPage() {
 
       {/* Modal de Detalles de Proforma */}
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="max-w-3xl rounded-3xl p-0 overflow-hidden bg-white shadow-2xl border-none">
+        <DialogContent className="max-w-[95vw] md:max-w-3xl max-h-[90vh] rounded-3xl p-0 overflow-hidden bg-white shadow-2xl border-none">
           <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 p-8 text-white">
             <DialogTitle className="text-2xl font-black tracking-tight">Detalle de Proforma</DialogTitle>
             <DialogDescription className="text-indigo-100 font-bold mt-1">
@@ -657,7 +657,7 @@ export default function ProformasPage() {
 
       {/* Modal Registrar Pago */}
       <Dialog open={paymentModalOpen} onOpenChange={(open) => !open && !loadingPayment && setPaymentModalOpen(false)}>
-        <DialogContent className="rounded-3xl bg-white border-none shadow-2xl">
+        <DialogContent className="w-[95vw] sm:max-w-[425px] max-h-[90vh] overflow-y-auto rounded-3xl bg-white border-none shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black text-slate-900">Registrar Pago</DialogTitle>
             <DialogDescription className="font-bold text-slate-500">
