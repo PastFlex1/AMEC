@@ -400,10 +400,35 @@ function createPDFDoc(data: PDFData) {
   return doc;
 }
 
+function savePDFCrossPlatform(doc: any, filename: string) {
+  try {
+    const isMobile =
+      typeof navigator !== 'undefined' &&
+      /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
+
+    if (isMobile) {
+      const blob = doc.output('blob');
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
+      return;
+    }
+  } catch (err) {
+    console.warn('Fallback a doc.save nativo:', err);
+  }
+  doc.save(filename);
+}
+
 export function generateBillingPDF(data: PDFData) {
   if (typeof window === 'undefined') return;
   const doc = createPDFDoc(data);
-  doc.save(`${data.title.replace(/\s/g, '_')}_${data.docNumber || 'DOC'}.pdf`);
+  savePDFCrossPlatform(doc, `${data.title.replace(/\s/g, '_')}_${data.docNumber || 'DOC'}.pdf`);
 }
 
 export function getBillingPDFBase64(data: PDFData): string {
@@ -819,7 +844,7 @@ export function generateMonthlyReportPDF(data: ReportData) {
   const finalY = (doc as any).lastAutoTable.finalY + 15;
   doc.setFontSize(7); doc.setTextColor(180, 180, 180);
   doc.text(`Reporte de ventas reales (Excluye Proformas). Generado el ${new Date().toLocaleString()}`, 105, finalY, { align: 'center' });
-  doc.save(`Reporte_Ventas_Apm_Inox_${data.monthName}_${data.year}.pdf`);
+  savePDFCrossPlatform(doc, `Reporte_Ventas_Apm_Inox_${data.monthName}_${data.year}.pdf`);
 }
 
 export interface WeeklyReportData {
@@ -948,7 +973,7 @@ export function generateWeeklyReportPDF(data: WeeklyReportData) {
   doc.setFontSize(7); doc.setTextColor(180, 180, 180);
   doc.text(`Reporte de estado de cartera (Semanal). Generado el ${new Date().toLocaleString()}`, 105, finalY + 25, { align: 'center' });
   
-  doc.save(`Reporte_Ventas_Semanal_Apm_Inox.pdf`);
+  savePDFCrossPlatform(doc, `Reporte_Ventas_Semanal_Apm_Inox.pdf`);
 }
 
 export interface RetentionPDFData {
@@ -1228,7 +1253,7 @@ function createRetentionPDFDoc(data: RetentionPDFData) {
 
 export function generateRetentionPDF(data: RetentionPDFData) {
   const doc = createRetentionPDFDoc(data);
-  doc.save(`Retencion_${data.docNumber || '000-000-000000000'}.pdf`);
+  savePDFCrossPlatform(doc, `Retencion_${data.docNumber || '000-000-000000000'}.pdf`);
 }
 
 export function getRetentionPDFBase64(data: RetentionPDFData): string {

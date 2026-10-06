@@ -1,8 +1,8 @@
 'use server';
 
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
-interface EmailData {
+export interface EmailData {
   to: string;
   subject: string;
   clientName: string;
@@ -15,48 +15,85 @@ interface EmailData {
 }
 
 /**
- * Acción de servidor para enviar correos electrónicos con comprobantes adjuntos (PDF + XML).
+ * Servidor de transporte reutilizable o inicializado bajo demanda para Gmail SMTP.
+ */
+function createGmailTransporter() {
+  const user = process.env.GMAIL_USER || process.env.SMTP_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || process.env.SMTP_PASS;
+
+  if (!user || !pass) {
+    throw new Error(
+      'Configuración de Gmail SMTP incompleta. Asegúrate de configurar GMAIL_USER y GMAIL_APP_PASSWORD en las variables de entorno (.env).'
+    );
+  }
+
+  // Limpiar espacios en caso de que el usuario haya copiado la contraseña con espacios (ej. "abcd efgh ijkl mnop")
+  const cleanPass = pass.replace(/\s+/g, '');
+
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: user.trim(),
+      pass: cleanPass,
+    },
+  });
+}
+
+/**
+ * Acción de servidor para enviar correos electrónicos con comprobantes adjuntos (PDF + XML) mediante Gmail SMTP.
  */
 export async function sendBillingEmail(data: EmailData) {
-  const apiKey = process.env.RESEND_API_KEY;
-  
-  if (!apiKey) {
-    console.error('[Email Action] RESEND_API_KEY no detectada.');
-    return { 
-      success: false, 
-      error: 'Configuración del servidor incompleta (API Key).' 
+  const user = process.env.GMAIL_USER || process.env.SMTP_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || process.env.SMTP_PASS;
+
+  if (!user || !pass) {
+    console.error('[Email Action] Variables GMAIL_USER o GMAIL_APP_PASSWORD no detectadas.');
+    return {
+      success: false,
+      error: 'Configuración de correo incompleta. Falta configurar GMAIL_USER o GMAIL_APP_PASSWORD en .env.',
     };
   }
 
   try {
-    const resend = new Resend(apiKey);
     const { to, subject, clientName, docType, total, docNumber, pdfBase64, xmlContent, observations } = data;
 
     if (!to || !to.includes('@')) {
-      return { success: false, error: 'La dirección de correo es inválida.' };
+      return { success: false, error: 'La dirección de correo del destinatario es inválida.' };
     }
 
-    const fromEmail = 'facturacion@amec.space'; 
-    const fromName = 'Facturación Apm Inox';
+    const transporter = createGmailTransporter();
 
-    const attachments: any[] = [
-      {
+    const fromName = process.env.SMTP_FROM_NAME || 'Facturación Apm Inox';
+    const fromAddress = process.env.SMTP_FROM_EMAIL || user.trim();
+
+    const attachments: Array<{
+      filename: string;
+      content: Buffer | string;
+      contentType?: string;
+    }> = [];
+
+    // Adjuntar PDF
+    if (pdfBase64) {
+      const cleanBase64 = pdfBase64.includes('base64,') ? pdfBase64.split('base64,')[1] : pdfBase64;
+      attachments.push({
         filename: `${docType.replace(/\s/g, '_')}_${docNumber}.pdf`,
-        content: pdfBase64,
-      }
-    ];
+        content: Buffer.from(cleanBase64, 'base64'),
+        contentType: 'application/pdf',
+      });
+    }
 
     // Si recibimos el XML, lo adjuntamos también
     if (xmlContent) {
       attachments.push({
         filename: `${docType.replace(/\s/g, '_')}_${docNumber}.xml`,
         content: xmlContent,
+        contentType: 'application/xml',
       });
     }
 
-    const result = await resend.emails.send({
-      from: `${fromName} <${fromEmail}>`,
-      to: [to],
+    const mailOptions = {
+      from: `"${fromName}" <${fromAddress}>`,
+      to: to.trim(),
       subject: subject,
       attachments,
       html: `
@@ -70,12 +107,16 @@ export async function sendBillingEmail(data: EmailData) {
             <p style="margin: 5px 0;"><strong>Número:</strong> ${docNumber}</p>
             <p style="margin: 5px 0;"><strong>Monto Total:</strong> $${total.toFixed(2)}</p>
             
-            ${observations ? `
+            ${
+              observations
+                ? `
               <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e2e8f0;">
                 <p style="margin: 0; color: #64748b; font-size: 12px; font-weight: bold; text-transform: uppercase;">Observaciones:</p>
                 <p style="margin: 5px 0 0 0; color: #334155; font-style: italic;">${observations}</p>
               </div>
-            ` : ''}
+            `
+                : ''
+            }
           </div>
 
           <p style="font-size: 14px; color: #64748b;">Este es un envío automático. Por favor no responda a este correo.</p>
@@ -85,17 +126,40 @@ export async function sendBillingEmail(data: EmailData) {
           </p>
         </div>
       `,
-    });
+    };
 
-    if (result.error) {
-      console.error('[Resend Error]', result.error);
-      return { success: false, error: result.error.message };
+    const info = await transporter.sendMail(mailOptions);
+    console.log('[Gmail SMTP] Correo enviado exitosamente:', info.messageId);
+
+    return { success: true, id: info.messageId };
+  } catch (err: any) {
+    console.error('[Gmail SMTP Error]', err);
+
+    let errorMessage = err.message || 'Error interno al procesar el envío del correo.';
+
+    if (err.code === 'EAUTH' || err.responseCode === 535) {
+      errorMessage =
+        'Error de autenticación con Gmail. Verifica tu cuenta y asegúrate de usar una Contraseña de Aplicación (App Password) de 16 caracteres de Google.';
     }
 
-    return { success: true, id: result.data?.id };
+    return { success: false, error: errorMessage };
+  }
+}
 
+/**
+ * Verifica si las credenciales de Gmail SMTP son válidas y si la conexión es exitosa.
+ */
+export async function verifyEmailConnection() {
+  try {
+    const transporter = createGmailTransporter();
+    await transporter.verify();
+    return { success: true, message: 'Conexión con Gmail SMTP establecida correctamente.' };
   } catch (err: any) {
-    console.error('[Critical Email Error]', err);
-    return { success: false, error: 'Error interno al procesar el envío del correo.' };
+    let errorMessage = err.message || 'Error al conectar con Gmail SMTP.';
+    if (err.code === 'EAUTH' || err.responseCode === 535) {
+      errorMessage =
+        'Error de autenticación con Gmail. Verifica tu correo y contraseña de aplicación (App Password) de 16 caracteres.';
+    }
+    return { success: false, error: errorMessage };
   }
 }

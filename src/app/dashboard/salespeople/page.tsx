@@ -11,7 +11,9 @@ import {
   Loader2,
   ShieldCheck,
   MoreHorizontal,
-  User
+  User,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +58,7 @@ export default function SalespeoplePage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [newUser, setNewUser] = useState({ name: "", email: "", password: "" });
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   const salespeopleRef = useMemo(() => (db ? collection(db, "salespeople") : null), [db]);
   const { data: salespeople, loading } = useCollection(salespeopleRef);
@@ -171,13 +174,28 @@ export default function SalespeoplePage() {
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
-                    type="text"
+                    type={showNewPassword ? "text" : "password"}
                     placeholder="Crear contraseña..." 
-                    className="pl-10 h-11 rounded-xl"
+                    className="pl-10 pr-10 h-11 rounded-xl"
                     value={newUser.password}
                     onChange={(e) => setNewUser({...newUser, password: e.target.value})}
                     required
                   />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    tabIndex={-1}
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-slate-400 hover:text-slate-600 transition-colors"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    title={showNewPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                  >
+                    {showNewPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
                 </div>
               </div>
               <DialogFooter className="pt-4">

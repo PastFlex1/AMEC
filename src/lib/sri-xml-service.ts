@@ -345,13 +345,15 @@ export function generateCreditNoteXML(data: SRIInvoiceData): string {
  * Descarga el XML generado en el navegador del usuario.
  */
 export function downloadXML(xmlString: string, filename: string) {
-  const blob = new Blob([xmlString], { type: "text/xml" });
+  const blob = new Blob([xmlString], { type: "text/xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
+  link.target = "_blank";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  // En móviles, revocar el blob de inmediato cancela la descarga; se retrasa 15 segundos
+  setTimeout(() => URL.revokeObjectURL(url), 15000);
 }
