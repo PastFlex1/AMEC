@@ -73,29 +73,22 @@ export function useSalesNote(db: Firestore | null) {
   }, [clientData.ruc, isConsumidorFinal]);
 
   const handleLookupCustomer = async () => {
-    if (!salesService || !clientData.ruc) return;
-    if (clientData.ruc.length !== 10 && clientData.ruc.length !== 13) {
-      toast({ title: "Identificación inválida", description: "Mínimo 10 dígitos.", variant: "destructive" });
+    if (!clientData.ruc) {
+      toast({ title: "Ingrese una identificación", description: "Escriba 10 dígitos para cédula o 13 para RUC.", variant: "destructive" });
       return;
     }
 
     setLoadingAction('lookup');
     try {
-      const data = await salesService.findCustomerByRuc(clientData.ruc);
-      if (data) {
+      await fetchCedulaData(clientData.ruc, (data) => {
         setClientData(prev => ({
           ...prev,
-          name: data.name || "",
-          address: data.address || "",
-          email: data.email || "",
-          phone: data.phone || ""
+          name: data.name || prev.name,
+          address: data.address || prev.address,
+          email: data.email || prev.email,
+          phone: data.phone || prev.phone
         }));
-        toast({ title: "Cliente encontrado" });
-      } else {
-        toast({ title: "Cliente no registrado", description: "La información ingresada se guardará solo en esta nota." });
-      }
-    } catch (e) {
-      toast({ title: "Error en búsqueda", variant: "destructive" });
+      }, { isManual: true });
     } finally {
       setLoadingAction(null);
     }

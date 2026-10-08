@@ -234,31 +234,22 @@ export default function NewInvoicePage() {
   }, [totalWithIVA, deposit]);
 
   const handleLookupCustomer = async () => {
-    if (!db || !clientData.ruc) return;
-    if (clientData.ruc.length !== 10 && clientData.ruc.length !== 13) {
-      toast({ title: "Identificación inválida", description: "Ingrese 10 o 13 dígitos.", variant: "destructive" });
+    if (!clientData.ruc) {
+      toast({ title: "Ingrese una identificación", description: "Escriba 10 dígitos para cédula o 13 para RUC.", variant: "destructive" });
       return;
     }
 
     setLoadingAction('lookup');
     try {
-      const q = query(collection(db, "customers"), where("ruc", "==", clientData.ruc));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const data = snap.docs[0].data();
+      await fetchCedulaData(clientData.ruc, (data) => {
         setClientData(prev => ({
           ...prev,
-          name: data.name || "",
-          address: data.address || "",
-          email: data.email || "",
-          phone: data.phone || ""
+          name: data.name || prev.name,
+          address: data.address || prev.address,
+          email: data.email || prev.email,
+          phone: data.phone || prev.phone
         }));
-        toast({ title: "Cliente encontrado en el directorio" });
-      } else {
-        toast({ title: "Cliente no registrado", description: "Puede completar los datos para esta factura." });
-      }
-    } catch (e) {
-      toast({ title: "Error en búsqueda", variant: "destructive" });
+      }, { isManual: true });
     } finally {
       setLoadingAction(null);
     }

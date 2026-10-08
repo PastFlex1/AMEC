@@ -2,23 +2,31 @@
 # See https://firebase.google.com/docs/app-hosting/configure#cloud-run
 runConfig:
   minInstances: 0
-  # maxInstances: 100
-  # concurrency: 80
-  # cpu: 1
-  # memoryMiB: 512
 
 # Environment variables and secrets.
-# env:
-  # Configure environment variables.
-  # See https://firebase.google.com/docs/app-hosting/configure#user-defined-environment
-  # - variable: MESSAGE
-  #   value: Hello world!
-  #   availability:
-  #     - BUILD
-  #     - RUNTIME
-
-  # Grant access to secrets in Cloud Secret Manager.
-  # You can create secrets with the CLI command `firebase apphosting:secrets:set <secretName>`.
-  # See https://firebase.google.com/docs/app-hosting/configure#secret-parameters
-  # - variable: MY_SECRET
-  #   secret: mySecretRef
+env:
+  - variable: GMAIL_USER
+    value: apm.inox.cotocollao@gmail.com
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: GMAIL_APP_PASSWORD
+    value: wjcnubfvhqgwffhe
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: SMTP_FROM_NAME
+    value: "Facturación Apm Inox"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_API_URL
+    value: "https://api-sri-production.up.railway.app"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: VITE_API_URL
+    value: "https://api-sri-production.up.railway.app"
+    availability:
+      - BUILD
+      - RUNTIME

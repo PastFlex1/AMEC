@@ -30,6 +30,7 @@ import {
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
+import { useCedulaSearch } from "@/hooks/useCedulaSearch";
 import { useFirestore, useDoc, useCollection } from "@/firebase";
 import { doc, updateDoc, serverTimestamp, collection } from "firebase/firestore";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,7 @@ export default function EditProformaPage() {
   const params = useParams();
   const proformaId = params.proformaId as string;
   const { toast } = useToast();
+  const { isSearchingCedula, fetchCedulaData } = useCedulaSearch();
   const db = useFirestore();
   
   const proformaRef = useMemo(() => (db ? doc(db, "proformas", proformaId) : null), [db, proformaId]);
@@ -61,7 +63,7 @@ export default function EditProformaPage() {
 
   const [date, setDate] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [loadingAction, setLoadingAction] = useState<'save' | 'pdf' | 'mail' | 'ticket' | null>(null);
+  const [loadingAction, setLoadingAction] = useState<'save' | 'pdf' | 'mail' | 'ticket' | 'lookup' | null>(null);
   const [showExitModal, setShowExitModal] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [showEmptyDataModal, setShowEmptyDataModal] = useState(false);
@@ -112,6 +114,26 @@ export default function EditProformaPage() {
   const subtotalBase = totalWithIVA;
   const ivaCalculated = 0;
   const balance = Math.max(0, totalWithIVA - deposit);
+
+  const handleLookupCustomer = async () => {
+    if (!clientData.ruc) {
+      toast({ title: "Ingrese una identificación", description: "Escriba 10 dígitos para cédula o 13 para RUC.", variant: "destructive" });
+      return;
+    }
+    setLoadingAction('lookup');
+    try {
+      await fetchCedulaData(clientData.ruc, (data) => {
+        setClientData(prev => ({
+          ...prev,
+          name: data.name || prev.name,
+          address: data.address || prev.address,
+          email: data.email || prev.email,
+          phone: data.phone || prev.phone
+        }));
+        setIsDirty(true);
+      }, { isManual: true });
+    } finally { setLoadingAction(null); }
+  };
 
   const docInfo = useMemo(() => {
     if (isConsumidorFinal) return { text: "Consumidor Final activo", isError: false };
@@ -300,7 +322,19 @@ export default function EditProformaPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
           <Card className="rounded-2xl border-none shadow-sm bg-white p-8 space-y-8">
-            <h2 className="text-xl font-bold text-slate-800 border-b pb-4">Información del Cliente</h2>
+            <div className="flex items-center justify-between border-b pb-4">
+              <h2 className="text-xl font-bold text-slate-800">Información del Cliente</h2>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-8 text-[10px] font-black uppercase"
+                onClick={handleLookupCustomer}
+                disabled={loadingAction === 'lookup' || isSearchingCedula || !clientData.ruc}
+              >
+                {loadingAction === 'lookup' || isSearchingCedula ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Search className="h-3 w-3 mr-1" />}
+                Buscar
+              </Button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-2">
                 <Label className="font-bold text-slate-700">R.U.C / C.I.</Label>
@@ -314,6 +348,15 @@ export default function EditProformaPage() {
                       setClientData({...clientData, ruc: val});
                       if (val !== "9999999999999") setIsConsumidorFinal(false);
                       setIsDirty(true);
+                      if (val.length === 10 || val.length === 13) {
+                        fetchCedulaData(val, (data) => setClientData(prev => ({
+                          ...prev,
+                          name: data.name || prev.name,
+                          address: data.address || prev.address,
+                          email: data.email || prev.email,
+                          phone: data.phone || prev.phone
+                        })));
+                      }
                     }} 
                     className="bg-slate-50 border-slate-200 h-11 focus:bg-white transition-colors"
                   />

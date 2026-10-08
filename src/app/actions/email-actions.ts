@@ -18,8 +18,8 @@ export interface EmailData {
  * Servidor de transporte reutilizable o inicializado bajo demanda para Gmail SMTP.
  */
 function createGmailTransporter() {
-  const user = process.env.GMAIL_USER || process.env.SMTP_USER;
-  const pass = process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || process.env.SMTP_PASS;
+  const user = process.env.GMAIL_USER || process.env.SMTP_USER || 'apm.inox.cotocollao@gmail.com';
+  const pass = process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || process.env.SMTP_PASS || 'wjcnubfvhqgwffhe';
 
   if (!user || !pass) {
     throw new Error(
@@ -43,8 +43,8 @@ function createGmailTransporter() {
  * Acción de servidor para enviar correos electrónicos con comprobantes adjuntos (PDF + XML) mediante Gmail SMTP.
  */
 export async function sendBillingEmail(data: EmailData) {
-  const user = process.env.GMAIL_USER || process.env.SMTP_USER;
-  const pass = process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || process.env.SMTP_PASS;
+  const user = process.env.GMAIL_USER || process.env.SMTP_USER || 'apm.inox.cotocollao@gmail.com';
+  const pass = process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || process.env.SMTP_PASS || 'wjcnubfvhqgwffhe';
 
   if (!user || !pass) {
     console.error('[Email Action] Variables GMAIL_USER o GMAIL_APP_PASSWORD no detectadas.');

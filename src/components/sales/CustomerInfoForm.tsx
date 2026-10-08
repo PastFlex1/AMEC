@@ -34,9 +34,9 @@ export function CustomerInfoForm({
             size="sm" 
             className="h-8 text-[10px] font-black uppercase"
             onClick={handleLookupCustomer}
-            disabled={loadingAction === 'lookup' || !clientData.ruc}
+            disabled={loadingAction === 'lookup' || isSearchingCedula || !clientData.ruc}
           >
-            {loadingAction === 'lookup' ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Search className="h-3 w-3 mr-1" />}
+            {loadingAction === 'lookup' || isSearchingCedula ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Search className="h-3 w-3 mr-1" />}
             Buscar
           </Button>
           <Button 

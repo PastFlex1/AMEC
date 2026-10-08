@@ -60,6 +60,7 @@ import { useFirestore, useDoc, useCollection } from "@/firebase";
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc, getDoc, increment } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useCedulaSearch } from "@/hooks/useCedulaSearch";
 import { generateBillingPDF, getBillingPDFBase64, generateThermalPDF } from "@/lib/pdf-service";
 import { sendBillingEmail } from "@/app/actions/email-actions";
 import { emitirFacturaAction, firmarXmlAction, recepcionarSriAction, autorizarSriAction } from "@/app/actions/sri-actions";
@@ -84,6 +85,7 @@ export default function EditInvoicePage() {
   const params = useParams();
   const invoiceId = params.invoiceId as string;
   const { toast } = useToast();
+  const { isSearchingCedula, fetchCedulaData } = useCedulaSearch();
   const db = useFirestore();
   const [taxConfig, setTaxConfig] = useState<TaxConfig>(DEFAULT_TAX_CONFIG);
   
@@ -210,26 +212,22 @@ export default function EditInvoicePage() {
   }, [totalWithIVA, deposit]);
 
   const handleLookupCustomer = async () => {
-    if (!db || !clientData.ruc) return;
+    if (!clientData.ruc) {
+      toast({ title: "Ingrese una identificación", description: "Escriba 10 dígitos para cédula o 13 para RUC.", variant: "destructive" });
+      return;
+    }
     setLoadingAction('lookup');
     try {
-      const q = query(collection(db, "customers"), where("ruc", "==", clientData.ruc));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const data = snap.docs[0].data();
+      await fetchCedulaData(clientData.ruc, (data) => {
         setClientData(prev => ({
           ...prev,
-          name: data.name || "",
-          address: data.address || "",
-          email: data.email || "",
-          phone: data.phone || ""
+          name: data.name || prev.name,
+          address: data.address || prev.address,
+          email: data.email || prev.email,
+          phone: data.phone || prev.phone
         }));
-        toast({ title: "Cliente encontrado" });
-      } else {
-        toast({ title: "No encontrado", description: "Puede completar los datos para esta factura." });
-      }
-    } catch (e) { toast({ title: "Error", variant: "destructive" }); }
-    finally { setLoadingAction(null); }
+      }, { isManual: true });
+    } finally { setLoadingAction(null); }
   };
 
   const handleSaveCustomerToDirectory = async () => {
@@ -712,8 +710,8 @@ export default function EditInvoicePage() {
                   <h2 className="text-xl font-bold text-slate-800">Información del Receptor</h2>
                   {!isReadOnly && (
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="h-8 text-[10px] font-black uppercase" onClick={handleLookupCustomer} disabled={loadingAction === 'lookup' || !clientData.ruc}>
-                        {loadingAction === 'lookup' ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Search className="h-3 w-3 mr-1" />} Buscar
+                      <Button variant="outline" size="sm" className="h-8 text-[10px] font-black uppercase" onClick={handleLookupCustomer} disabled={loadingAction === 'lookup' || isSearchingCedula || !clientData.ruc}>
+                        {loadingAction === 'lookup' || isSearchingCedula ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Search className="h-3 w-3 mr-1" />} Buscar
                       </Button>
                       <Button variant="outline" size="sm" className="h-8 text-[10px] font-black uppercase bg-primary/5 text-primary border-primary/20" onClick={handleSaveCustomerToDirectory} disabled={loadingAction === 'save_customer' || !clientData.name || !clientData.ruc}>
                         {loadingAction === 'save_customer' ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <UserPlus className="h-3 w-3 mr-1" />} Guardar
@@ -724,7 +722,25 @@ export default function EditInvoicePage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label className="font-bold text-[10px] uppercase">R.U.C / C.I.</Label>
-                    <Input value={clientData.ruc} disabled={isReadOnly} onChange={e => setClientData({...clientData, ruc: e.target.value.replace(/\D/g, '')})} className="bg-slate-50 h-11" />
+                    <Input 
+                      value={clientData.ruc} 
+                      disabled={isReadOnly} 
+                      maxLength={13}
+                      onChange={e => {
+                        const val = e.target.value.replace(/\D/g, '');
+                        setClientData({...clientData, ruc: val});
+                        if (val.length === 10 || val.length === 13) {
+                          fetchCedulaData(val, (data) => setClientData(prev => ({
+                            ...prev,
+                            name: data.name || prev.name,
+                            address: data.address || prev.address,
+                            email: data.email || prev.email,
+                            phone: data.phone || prev.phone
+                          })));
+                        }
+                      }} 
+                      className="bg-slate-50 h-11" 
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label className="font-bold text-[10px] uppercase">Razón Social</Label>

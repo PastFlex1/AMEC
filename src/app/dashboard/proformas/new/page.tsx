@@ -134,31 +134,22 @@ export default function NewProformaPage() {
   }, [clientData.ruc, isConsumidorFinal]);
 
   const handleLookupCustomer = async () => {
-    if (!db || !clientData.ruc) return;
-    if (clientData.ruc.length !== 10 && clientData.ruc.length !== 13) {
-      toast({ title: "Identificación inválida", description: "Ingrese 10 o 13 dígitos.", variant: "destructive" });
+    if (!clientData.ruc) {
+      toast({ title: "Ingrese una identificación", description: "Escriba 10 dígitos para cédula o 13 para RUC.", variant: "destructive" });
       return;
     }
 
     setLoadingAction('lookup');
     try {
-      const q = query(collection(db, "customers"), where("ruc", "==", clientData.ruc));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const data = snap.docs[0].data();
+      await fetchCedulaData(clientData.ruc, (data) => {
         setClientData(prev => ({
           ...prev,
-          name: data.name || "",
-          address: data.address || "",
-          email: data.email || "",
-          phone: data.phone || ""
+          name: data.name || prev.name,
+          address: data.address || prev.address,
+          email: data.email || prev.email,
+          phone: data.phone || prev.phone
         }));
-        toast({ title: "Cliente encontrado" });
-      } else {
-        toast({ title: "No se encontró el cliente", description: "Los datos ingresados se guardarán solo en esta proforma." });
-      }
-    } catch (e) {
-      toast({ title: "Error en búsqueda", variant: "destructive" });
+      }, { isManual: true });
     } finally {
       setLoadingAction(null);
     }
@@ -328,9 +319,9 @@ export default function NewProformaPage() {
                   size="sm" 
                   className="h-8 text-[10px] font-black uppercase"
                   onClick={handleLookupCustomer}
-                  disabled={loadingAction === 'lookup' || !clientData.ruc}
+                  disabled={loadingAction === 'lookup' || isSearchingCedula || !clientData.ruc}
                 >
-                  {loadingAction === 'lookup' ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Search className="h-3 w-3 mr-1" />}
+                  {loadingAction === 'lookup' || isSearchingCedula ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Search className="h-3 w-3 mr-1" />}
                   Buscar
                 </Button>
                 <Button 
