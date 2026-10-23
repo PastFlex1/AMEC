@@ -637,27 +637,33 @@ export default function EditInvoicePage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={handleSendEmail} disabled={loadingAction !== null || isAnnulled}>
-              {loadingAction === 'mail' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Mail className="mr-2 h-4 w-4" />} Email
+              {loadingAction === 'mail' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Mail className="mr-2 h-4 w-4" />}
+              <span>Email</span>
             </Button>
             <Button variant="outline" onClick={() => { if(authorizedXml) downloadXML(authorizedXml, `Factura_${invoice?.invoiceNumber}.xml`) }} disabled={loadingAction !== null || !isAuthorized}>
-              {loadingAction === 'xml' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Code className="mr-2 h-4 w-4" />} XML
+              {loadingAction === 'xml' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Code className="mr-2 h-4 w-4" />}
+              <span>XML</span>
             </Button>
             <Button variant="outline" onClick={handlePrintTicket} disabled={loadingAction !== null || isAnnulled}>
-              {loadingAction === 'ticket' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Printer className="mr-2 h-4 w-4" />} Ticket
+              {loadingAction === 'ticket' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Printer className="mr-2 h-4 w-4" />}
+              <span>Ticket</span>
             </Button>
             <Button variant="outline" onClick={handleDownloadRIDE} disabled={loadingAction !== null}>
-              {loadingAction === 'pdf' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <FileDown className="mr-2 h-4 w-4" />} RIDE
+              {loadingAction === 'pdf' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <FileDown className="mr-2 h-4 w-4" />}
+              <span>RIDE</span>
             </Button>
             
             {isAuthorized && !isAnnulled && (
               <Button variant="outline" className="text-amber-600 border-amber-200 hover:bg-amber-50" onClick={() => setShowAnnulDialog(true)} disabled={loadingAction !== null}>
-                <Ban className="mr-2 h-4 w-4" /> Anular Factura (NC)
+                <Ban className="mr-2 h-4 w-4" />
+                <span>Anular Factura (NC)</span>
               </Button>
             )}
 
             {!isReadOnly && (
               <Button onClick={() => handleSave()} disabled={loadingAction !== null} className="bg-slate-900 text-white">
-                {loadingAction === 'save' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />} Guardar
+                {loadingAction === 'save' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
+                <span>Guardar</span>
               </Button>
             )}
             
@@ -775,7 +781,22 @@ export default function EditInvoicePage() {
               <CardHeader className="bg-slate-50/50 pb-4"><CardTitle className="text-xl font-black tracking-tight text-slate-800">Acciones de Facturación</CardTitle></CardHeader>
               <CardContent className="p-6 space-y-6">
                 <Button onClick={handleSendToSRI} disabled={loadingAction === 'sri' || isReadOnly} className={cn("w-full h-14 rounded-xl font-bold text-base transition-all shadow-lg", isReadOnly ? "bg-slate-200 text-slate-500" : "bg-accent hover:bg-accent/90")}>
-                  {loadingAction === 'sri' ? <><Loader2 className="animate-spin mr-2 h-5 w-5" /> Procesando SRI...</> : isReadOnly ? <><Lock className="mr-2 h-5 w-5" /> Finalizada</> : <><Send className="mr-2 h-5 w-5" /> Enviar al SRI</>}
+                  {loadingAction === 'sri' ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="animate-spin h-5 w-5" />
+                      <span>Procesando SRI...</span>
+                    </span>
+                  ) : isReadOnly ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Lock className="h-5 w-5" />
+                      <span>Finalizada</span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
+                      <Send className="h-5 w-5" />
+                      <span>Enviar al SRI</span>
+                    </span>
+                  )}
                 </Button>
                 <div className="space-y-4 pt-2">
                   <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100"><div className="flex items-center gap-3"><div className={cn("h-8 w-8 rounded-full flex items-center justify-center", sriStatus.firma ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400")}><ShieldCheck className="h-4 w-4" /></div><span className={cn("text-sm font-bold", sriStatus.firma ? "text-slate-900" : "text-slate-400")}>Firma Digital</span></div>{sriStatus.firma && <Check className="h-5 w-5 text-emerald-500" />}</div>

@@ -643,19 +643,24 @@ export default function NewInvoicePage() {
           </div>
           <div className="flex flex-wrap gap-2 w-full lg:w-auto">
             <Button variant="outline" onClick={handleSendEmail} disabled={loadingAction !== null}>
-              {loadingAction === 'mail' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Mail className="mr-2 h-4 w-4" />} Email
+              {loadingAction === 'mail' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Mail className="mr-2 h-4 w-4" />}
+              <span>Email</span>
             </Button>
             <Button variant="outline" onClick={handleDownloadXML} disabled={loadingAction !== null || currentStatus !== 'Autorizado'}>
-              {loadingAction === 'xml' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Code className="mr-2 h-4 w-4" />} XML
+              {loadingAction === 'xml' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Code className="mr-2 h-4 w-4" />}
+              <span>XML</span>
             </Button>
             <Button variant="outline" onClick={handlePrintTicket} disabled={loadingAction !== null}>
-              {loadingAction === 'ticket' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Printer className="mr-2 h-4 w-4" />} Ticket
+              {loadingAction === 'ticket' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Printer className="mr-2 h-4 w-4" />}
+              <span>Ticket</span>
             </Button>
             <Button variant="outline" onClick={handleDownloadRIDE} disabled={loadingAction !== null}>
-              {loadingAction === 'pdf' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <FileDown className="mr-2 h-4 w-4" />} RIDE
+              {loadingAction === 'pdf' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <FileDown className="mr-2 h-4 w-4" />}
+              <span>RIDE</span>
             </Button>
             <Button onClick={() => handleSave()} disabled={loadingAction !== null} className="bg-slate-900 text-white">
-              {loadingAction === 'save' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />} Guardar
+              {loadingAction === 'save' ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
+              <span>Guardar</span>
             </Button>
           </div>
         </div>
@@ -776,7 +781,22 @@ export default function NewInvoicePage() {
               <CardHeader className="bg-slate-50/50 pb-4"><CardTitle className="text-xl font-black tracking-tight text-slate-800">Acciones SRI</CardTitle></CardHeader>
               <CardContent className="p-6 space-y-6">
                 <Button onClick={handleSendToSRI} disabled={loadingAction === 'sri' || currentStatus === 'Autorizado'} className={cn("w-full h-14 rounded-xl font-bold text-base transition-all shadow-lg", currentStatus === 'Autorizado' ? "bg-primary text-white cursor-default" : "bg-accent hover:bg-accent/90")}>
-                  {loadingAction === 'sri' ? <><Loader2 className="animate-spin mr-2 h-5 w-5" /> Procesando...</> : currentStatus === 'Autorizado' ? <><CheckCircle2 className="mr-2 h-5 w-5" /> Autorizada</> : <><Send className="mr-2 h-5 w-5" /> Enviar al SRI</>}
+                  {loadingAction === 'sri' ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="animate-spin h-5 w-5" />
+                      <span>Procesando...</span>
+                    </span>
+                  ) : currentStatus === 'Autorizado' ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <CheckCircle2 className="h-5 w-5" />
+                      <span>Autorizada</span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
+                      <Send className="h-5 w-5" />
+                      <span>Enviar al SRI</span>
+                    </span>
+                  )}
                 </Button>
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
