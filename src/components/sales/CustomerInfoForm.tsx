@@ -1,3 +1,4 @@
+import { Dispatch, SetStateAction } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,7 @@ import { SalesNoteClientData } from "@/hooks/useSalesNote";
 
 interface CustomerInfoFormProps {
   clientData: SalesNoteClientData;
-  setClientData: (data: SalesNoteClientData) => void;
+  setClientData: Dispatch<SetStateAction<SalesNoteClientData>>;
   isConsumidorFinal: boolean;
   handleConsumidorFinal: () => void;
   loadingAction: string | null;
@@ -61,16 +62,16 @@ export function CustomerInfoForm({
               maxLength={13} 
               onChange={(e) => {
                 const val = e.target.value.replace(/\D/g, '');
-                setClientData({...clientData, ruc: val});
+                setClientData(prev => ({ ...prev, ruc: val }));
                 if (val.length === 10 || val.length === 13) {
-                  fetchCedulaData(val, (data) => setClientData({
-                    ...clientData, 
+                  fetchCedulaData(val, (data) => setClientData(prev => ({
+                    ...prev, 
                     ruc: val,
-                    name: data.name || clientData.name,
-                    address: data.address || clientData.address,
-                    email: data.email || clientData.email,
-                    phone: data.phone || clientData.phone
-                  }));
+                    name: data.name || prev.name,
+                    address: data.address || prev.address,
+                    email: data.email || prev.email,
+                    phone: data.phone || prev.phone
+                  })));
                 }
               }}
               className="bg-slate-50 h-11" 
