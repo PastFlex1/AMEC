@@ -433,7 +433,9 @@ export default function EditInvoicePage() {
         observaciones: observations,
         transferNumber: clientData.transferNumber,
         deposit: deposit,
-        balance: balance
+        balance: balance,
+        regimen: taxConfig.regimen,
+        obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO"
       });
 
       // 1️⃣ Paso 1: Firmar XML
@@ -463,7 +465,9 @@ export default function EditInvoicePage() {
   };
 
   const handleDownloadRIDE = async () => {
-    await handleSave(currentStatus);
+    if (!isReadOnly) {
+      await handleSave(currentStatus);
+    }
     setLoadingAction('pdf');
     try {
       const extractedAccessKey = 
@@ -508,7 +512,9 @@ export default function EditInvoicePage() {
   };
 
   const handlePrintTicket = async () => {
-    await handleSave(currentStatus);
+    if (!isReadOnly) {
+      await handleSave(currentStatus);
+    }
     setLoadingAction('ticket');
     try {
       const extractedAccessKey = 
@@ -554,7 +560,9 @@ export default function EditInvoicePage() {
 
   const handleSendEmail = async () => {
     if (!clientData.email) return toast({ title: "Email requerido", variant: "destructive" });
-    await handleSave(currentStatus);
+    if (!isReadOnly) {
+      await handleSave(currentStatus);
+    }
     setLoadingAction('mail');
     try {
       const extractedAccessKey = 

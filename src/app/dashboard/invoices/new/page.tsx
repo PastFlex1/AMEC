@@ -92,6 +92,8 @@ export default function NewInvoicePage() {
   
   const docIdRef = useRef<string | null>(null);
   const stockDeductedRef = useRef<boolean>(false);
+  const lockedInvoiceNumberRef = useRef<string | null>(null);
+  const lockedClaveAccesoRef = useRef<string | null>(null);
 
   const [currentStatus, setCurrentStatus] = useState("Pendiente");
 
@@ -134,6 +136,8 @@ export default function NewInvoicePage() {
     if (!db) return;
     const q = query(collection(db, "invoices"), orderBy("invoiceNumber", "desc"), limit(1));
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      // Si la factura actual ya fue creada o bloqueada en esta sesión, NO incrementar el número en pantalla
+      if (docIdRef.current || lockedInvoiceNumberRef.current) return;
       if (!snapshot.empty) {
         const lastInv = snapshot.docs[0].data();
         const lastNum = lastInv.invoiceNumber || "001-100-000000000";
@@ -286,14 +290,15 @@ export default function NewInvoicePage() {
     }
   };
 
-  const getClaveAccesoActual = () => {
+  const getClaveAccesoActual = (customInvNumber?: string) => {
+    const activeNum = customInvNumber || lockedInvoiceNumberRef.current || invoiceNumber;
     return generateAccessKey({
       rucEmisor: taxConfig.ruc,
       razonSocialEmisor: taxConfig.razonSocial,
       dirMatriz: taxConfig.dirMatriz,
       estab: taxConfig.estab,
       ptoEmi: taxConfig.ptoEmi,
-      secuencial: invoiceNumber.split("-")[2],
+      secuencial: activeNum.split("-")[2],
       fechaEmision: format(date, "dd/MM/yyyy"),
       cliente: { razonSocial: clientData.name, identificacion: clientData.ruc },
       items: items.map(i => ({ descripcion: i.description, cantidad: i.quantity, precioUnitario: i.unitPrice, ivaRate: i.ivaRate })),
@@ -301,7 +306,13 @@ export default function NewInvoicePage() {
     });
   };
 
-  const handleSave = async (customStatus?: string, customAuthDate?: string, customAuthorizedXml?: string, sriError?: string) => {
+  const handleSave = async (
+    customStatus?: string,
+    customAuthDate?: string,
+    customAuthorizedXml?: string,
+    sriError?: string,
+    customClaveAcceso?: string
+  ) => {
     if (!db) return null;
     if (!clientData.name || clientData.ruc.length < 10) { setShowEmptyDataModal(true); return null; }
 
@@ -328,11 +339,21 @@ export default function NewInvoicePage() {
     const isSilent = customStatus !== undefined;
     if (!isSilent) setLoadingAction('save');
 
-    const accessKey = getClaveAccesoActual();
+    // Bloquear el secuencial de esta factura para que onSnapshot no lo incremente a mitad del proceso
+    if (!lockedInvoiceNumberRef.current) {
+      lockedInvoiceNumberRef.current = invoiceNumber;
+    }
+    const activeInvoiceNumber = lockedInvoiceNumberRef.current;
+
+    if (customClaveAcceso) {
+      lockedClaveAccesoRef.current = customClaveAcceso;
+    }
+    const accessKey = customClaveAcceso || lockedClaveAccesoRef.current || currentClaveAcceso || getClaveAccesoActual(activeInvoiceNumber);
+    lockedClaveAccesoRef.current = accessKey;
     setCurrentClaveAcceso(accessKey);
 
     const invoiceData: any = {
-      invoiceNumber,
+      invoiceNumber: activeInvoiceNumber,
       claveAcceso: accessKey,
       clientData: { ...clientData },
       items: items.filter(i => i.description.trim() !== ""),
@@ -398,7 +419,12 @@ export default function NewInvoicePage() {
 
   const handleSendToSRI = async () => {
     if (currentStatus === 'Autorizado') return;
-    
+
+    if (!lockedInvoiceNumberRef.current) {
+      lockedInvoiceNumberRef.current = invoiceNumber;
+    }
+    const activeInvoiceNumber = lockedInvoiceNumberRef.current;
+
     const docId = await handleSave(currentStatus);
     if (!docId) return;
 
@@ -412,7 +438,7 @@ export default function NewInvoicePage() {
         dirMatriz: taxConfig.dirMatriz,
         estab: taxConfig.estab,
         ptoEmi: taxConfig.ptoEmi,
-        secuencial: invoiceNumber.split("-")[2],
+        secuencial: activeInvoiceNumber.split("-")[2],
         fechaEmision: format(date, "dd/MM/yyyy"),
         cliente: {
           razonSocial: clientData.name,
@@ -439,6 +465,8 @@ export default function NewInvoicePage() {
       // 1️⃣ Paso 1: Firmar XML
       const resFirma = await firmarXmlAction(xmlBase);
       if (!resFirma.success) throw new Error(resFirma.error);
+      lockedClaveAccesoRef.current = resFirma.claveAcceso!;
+      setCurrentClaveAcceso(resFirma.claveAcceso!);
       setSriStatus(prev => ({ ...prev, firma: true }));
 
       // 2️⃣ Paso 2: Recepción SRI
@@ -457,11 +485,12 @@ export default function NewInvoicePage() {
       setAuthorizedXml(resAuth.autorizacion || null);
       setCurrentStatus("Autorizado");
 
-      await handleSave("Autorizado", formattedAuthDate, resAuth.autorizacion, "");
+      await handleSave("Autorizado", formattedAuthDate, resAuth.autorizacion, "", resFirma.claveAcceso!);
       toast({ title: "Factura Autorizada por el SRI" });
 
     } catch (error: any) {
-      await handleSave("Rechazado", undefined, undefined, error.message);
+      setCurrentStatus("Rechazado");
+      await handleSave("Rechazado", undefined, undefined, error.message, lockedClaveAccesoRef.current || undefined);
       toast({ title: "Rechazo SRI", description: error.message, variant: "destructive" });
     } finally { setLoadingAction(null); }
   };
@@ -469,8 +498,13 @@ export default function NewInvoicePage() {
   const handleDownloadRIDE = async () => {
     if (!clientData.name) { setShowEmptyDataModal(true); return; }
     
-    const docId = await handleSave(currentStatus);
-    if (!docId) return;
+    if (currentStatus !== 'Autorizado') {
+      const docId = await handleSave(currentStatus);
+      if (!docId) return;
+    }
+
+    const activeInvoiceNumber = lockedInvoiceNumberRef.current || invoiceNumber;
+    const activeAccessKey = lockedClaveAccesoRef.current || currentClaveAcceso || getClaveAccesoActual(activeInvoiceNumber);
 
     setLoadingAction('pdf');
     try {
@@ -501,8 +535,8 @@ export default function NewInvoicePage() {
         deposit,
         balance,
         date: format(date, "dd/MM/yyyy"),
-        docNumber: invoiceNumber,
-        accessKey: currentClaveAcceso || getClaveAccesoActual(), 
+        docNumber: activeInvoiceNumber,
+        accessKey: activeAccessKey, 
         status: currentStatus,
         time: authDate || undefined,
         observations
@@ -513,8 +547,13 @@ export default function NewInvoicePage() {
   const handlePrintTicket = async () => {
     if (!clientData.name) { setShowEmptyDataModal(true); return; }
     
-    const docId = await handleSave(currentStatus);
-    if (!docId) return;
+    if (currentStatus !== 'Autorizado') {
+      const docId = await handleSave(currentStatus);
+      if (!docId) return;
+    }
+
+    const activeInvoiceNumber = lockedInvoiceNumberRef.current || invoiceNumber;
+    const activeAccessKey = lockedClaveAccesoRef.current || currentClaveAcceso || getClaveAccesoActual(activeInvoiceNumber);
 
     setLoadingAction('ticket');
     try {
@@ -545,8 +584,8 @@ export default function NewInvoicePage() {
         deposit,
         balance,
         date: format(date, "dd/MM/yyyy"),
-        docNumber: invoiceNumber,
-        accessKey: currentClaveAcceso || getClaveAccesoActual(), 
+        docNumber: activeInvoiceNumber,
+        accessKey: activeAccessKey, 
         status: currentStatus,
         time: authDate || undefined,
         observations
@@ -556,16 +595,22 @@ export default function NewInvoicePage() {
 
   const handleDownloadXML = () => {
     if (currentStatus !== 'Autorizado') return;
+    const activeInvoiceNumber = lockedInvoiceNumberRef.current || invoiceNumber;
     setLoadingAction('xml');
-    if (authorizedXml) downloadXML(authorizedXml, `Factura_${invoiceNumber}.xml`);
+    if (authorizedXml) downloadXML(authorizedXml, `Factura_${activeInvoiceNumber}.xml`);
     setLoadingAction(null);
   };
 
   const handleSendEmail = async () => {
     if (!clientData.email) return toast({ title: "Email requerido", variant: "destructive" });
 
-    const docId = await handleSave(currentStatus);
-    if (!docId) return;
+    if (currentStatus !== 'Autorizado') {
+      const docId = await handleSave(currentStatus);
+      if (!docId) return;
+    }
+
+    const activeInvoiceNumber = lockedInvoiceNumberRef.current || invoiceNumber;
+    const activeAccessKey = lockedClaveAccesoRef.current || currentClaveAcceso || getClaveAccesoActual(activeInvoiceNumber);
 
     setLoadingAction('mail');
     try {
@@ -596,8 +641,8 @@ export default function NewInvoicePage() {
         deposit,
         balance,
         date: format(date, "dd/MM/yyyy"),
-        docNumber: invoiceNumber,
-        accessKey: currentClaveAcceso || getClaveAccesoActual(),
+        docNumber: activeInvoiceNumber,
+        accessKey: activeAccessKey,
         status: currentStatus,
         time: authDate || undefined,
         observations
@@ -607,11 +652,11 @@ export default function NewInvoicePage() {
 
       const res = await sendBillingEmail({
         to: clientData.email,
-        subject: `Factura Apm Inox - #${invoiceNumber}`,
+        subject: `Factura Apm Inox - #${activeInvoiceNumber}`,
         clientName: clientData.name,
         docType: "Factura",
         total: totalWithIVA,
-        docNumber: invoiceNumber,
+        docNumber: activeInvoiceNumber,
         pdfBase64: base64,
         xmlContent: xmlBase64,
         observations: observations

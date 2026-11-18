@@ -49,14 +49,14 @@ export function useSalesNote(db: Firestore | null) {
   const salesService = useMemo(() => db ? new SalesService(db) : null, [db]);
 
   useEffect(() => {
-    if (!salesService) return;
+    if (!salesService || savedDocId) return;
     
     const unsubscribe = salesService.subscribeToLatestNoteNumber((num) => {
       setNoteNumber(num);
     });
     
     return () => unsubscribe();
-  }, [salesService]);
+  }, [salesService, savedDocId]);
 
   const totalWithIVA = items.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
   const subtotalBase = totalWithIVA;

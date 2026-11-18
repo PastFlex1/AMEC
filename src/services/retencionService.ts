@@ -153,7 +153,14 @@ export async function autorizarRetencion(claveAcceso: string, retries = 3, delay
           continue;
         }
 
-        const isAuthorized = autorizacion.toUpperCase().includes("AUTORIZADO");
+        const isNoAutorizado =
+          /<estado>\s*(NO AUTORIZADO|RECHAZADA|DEVUELTA)\s*<\/estado>/i.test(autorizacion) ||
+          /"estado"\s*:\s*"(NO AUTORIZADO|RECHAZADA|DEVUELTA)"/i.test(autorizacion);
+
+        const isAuthorized =
+          !isNoAutorizado &&
+          (/<estado>\s*AUTORIZADO\s*<\/estado>/i.test(autorizacion) ||
+            /"estado"\s*:\s*"AUTORIZADO"/i.test(autorizacion));
 
         return {
           success: isAuthorized,

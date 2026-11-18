@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { 
   ArrowLeft, 
@@ -76,6 +76,7 @@ export default function NewProformaPage() {
   const [productSearch, setProductSearch] = useState("");
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
   const [savedDocId, setSavedDocId] = useState<string | null>(null);
+  const isNumberLockedRef = useRef<boolean>(false);
   const [deposit, setDeposit] = useState<number>(0);
   
   const [clientData, setClientData] = useState({
@@ -99,6 +100,7 @@ export default function NewProformaPage() {
     if (!db) return;
     const q = query(collection(db, "proformas"), orderBy("proformaNumber", "desc"), limit(1));
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (isNumberLockedRef.current) return;
       if (!snapshot.empty) {
         const lastDoc = snapshot.docs[0].data();
         const lastNum = lastDoc.proformaNumber || "003-001-000000000";
@@ -202,6 +204,7 @@ export default function NewProformaPage() {
     if (!clientData.name || (!isConsumidorFinal && clientData.ruc.length < 10)) { toast({ title: "Datos incompletos", variant: "destructive" }); return null; }
 
     setLoadingAction('save');
+    isNumberLockedRef.current = true;
     try {
       const proformaData: any = {
         proformaNumber,

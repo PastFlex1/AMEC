@@ -57,6 +57,25 @@ export async function firmarXmlAction(xml: string) {
   }
 }
 
+function extractSriMessages(rawText: string): string {
+  const mensajes: string[] = [];
+  const msgRegex = /<mensaje>([\s\S]*?)<\/mensaje>/gi;
+  const infoRegex = /<informacionAdicional>([\s\S]*?)<\/informacionAdicional>/gi;
+
+  let m: RegExpExecArray | null;
+  while ((m = msgRegex.exec(rawText)) !== null) {
+    if (m[1]?.trim()) mensajes.push(m[1].trim());
+  }
+  while ((m = infoRegex.exec(rawText)) !== null) {
+    if (m[1]?.trim()) mensajes.push(m[1].trim());
+  }
+
+  if (mensajes.length > 0) {
+    return mensajes.join(' | ');
+  }
+  return rawText.length > 300 ? rawText.slice(0, 300) + '...' : rawText;
+}
+
 export async function recepcionarSriAction(xmlFirmado: string) {
   try {
     const baseUrl = getBaseUrl();
@@ -75,31 +94,77 @@ export async function recepcionarSriAction(xmlFirmado: string) {
     }
     const recepcion = await resRecepcion.text();
 
+    const upper = recepcion.toUpperCase();
+    // Si el SRI devuelve DEVUELTA, verificar si es error 43 (CLAVE ACCESO REGISTRADA), en cuyo caso sí podemos consultar autorización
+    const isDevuelta =
+      /<estado>\s*DEVUELTA\s*<\/estado>/i.test(recepcion) ||
+      /"estado"\s*:\s*"DEVUELTA"/i.test(recepcion);
+
+    const isClaveRegistrada =
+      upper.includes("CLAVE ACCESO REGISTRADA") ||
+      /<identificador>\s*43\s*<\/identificador>/i.test(recepcion);
+
+    if (isDevuelta && !isClaveRegistrada) {
+      const detail = extractSriMessages(recepcion);
+      throw new Error(`Comprobante DEVUELTO por el SRI en Recepción: ${detail}`);
+    }
+
     return { success: true, recepcion };
   } catch (error: any) {
     return { success: false, error: error.message || "Error en recepción del SRI." };
   }
 }
 
-export async function autorizarSriAction(claveAcceso: string, retries = 3, delayMs = 2000) {
+export async function autorizarSriAction(claveAcceso: string, retries = 5, delayMs = 2500) {
   const baseUrl = getBaseUrl();
-  let lastError = "No se pudo consultar la autorización legal definitiva.";
+  let lastError = "No se pudo consultar la autorización legal definitiva en el SRI.";
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const resAutorizacion = await fetch(
-        `${baseUrl}/api/sri/autorizacion/${claveAcceso}`
+        `${baseUrl}/api/sri/autorizacion/${claveAcceso}`,
+        { cache: "no-store" }
       );
 
       if (resAutorizacion.ok) {
         const autorizacion = await resAutorizacion.text();
-        if (autorizacion.includes("EN PROCESO") && attempt < retries) {
+
+        const isNoAutorizado =
+          /<estado>\s*(NO AUTORIZADO|RECHAZADA|DEVUELTA)\s*<\/estado>/i.test(autorizacion) ||
+          /"estado"\s*:\s*"(NO AUTORIZADO|RECHAZADA|DEVUELTA)"/i.test(autorizacion);
+
+        if (isNoAutorizado) {
+          const detail = extractSriMessages(autorizacion);
+          return {
+            success: false,
+            error: `El SRI NO autorizó el comprobante: ${detail}`
+          };
+        }
+
+        const isAutorizado =
+          /<estado>\s*AUTORIZADO\s*<\/estado>/i.test(autorizacion) ||
+          /"estado"\s*:\s*"AUTORIZADO"/i.test(autorizacion);
+
+        if (isAutorizado) {
+          return { success: true, autorizacion };
+        }
+
+        // Si está EN PROCESO o aún devuelve 0 comprobantes, esperar y reintentar
+        const isZeroOrProcessing =
+          autorizacion.toUpperCase().includes("EN PROCESO") ||
+          autorizacion.toUpperCase().includes("PROCESAMIENTO") ||
+          /<numeroComprobantes>\s*0\s*<\/numeroComprobantes>/i.test(autorizacion);
+
+        lastError = isZeroOrProcessing
+          ? "El comprobante sigue en procesamiento en el SRI o aún no registra autorización."
+          : `Respuesta del SRI sin estado AUTORIZADO: ${extractSriMessages(autorizacion)}`;
+
+        if (attempt < retries) {
           await new Promise((resolve) => setTimeout(resolve, delayMs));
           continue;
         }
-        return { success: true, autorizacion };
       } else {
         const errorText = await resAutorizacion.text();
-        lastError = errorText || "No se pudo consultar la autorización legal definitiva.";
+        lastError = errorText || `Error HTTP ${resAutorizacion.status} al consultar autorización en el SRI.`;
         if (attempt < retries) {
           await new Promise((resolve) => setTimeout(resolve, delayMs));
         }
