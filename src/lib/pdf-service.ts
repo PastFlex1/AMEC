@@ -400,7 +400,7 @@ function createPDFDoc(data: PDFData) {
   return doc;
 }
 
-function savePDFCrossPlatform(doc: any, filename: string) {
+export function savePDFCrossPlatform(doc: any, filename: string) {
   try {
     const isMobile =
       typeof navigator !== 'undefined' &&

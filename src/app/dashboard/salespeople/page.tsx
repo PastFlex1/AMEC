@@ -46,10 +46,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useFirestore, useCollection } from "@/firebase";
-import { collection, addDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
+import { collection, deleteDoc, doc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { errorEmitter } from "@/firebase/error-emitter";
 import { FirestorePermissionError } from "@/firebase/errors";
+import { firebaseConfig } from "@/firebase/config";
+import { authErrorMessage, createAuthAccountAsAdmin } from "@/firebase/auth/staff";
 
 export default function SalespeoplePage() {
   const { toast } = useToast();
@@ -59,6 +61,7 @@ export default function SalespeoplePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [newUser, setNewUser] = useState({ name: "", email: "", password: "" });
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [migratingId, setMigratingId] = useState<string | null>(null);
 
   const salespeopleRef = useMemo(() => (db ? collection(db, "salespeople") : null), [db]);
   const { data: salespeople, loading } = useCollection(salespeopleRef);
@@ -81,28 +84,62 @@ export default function SalespeoplePage() {
     }
 
     setIsSaving(true);
-    const userData = {
-      name: newUser.name,
-      email: newUser.email,
-      password: newUser.password,
-      status: "Activo",
-      createdAt: serverTimestamp()
-    };
+    try {
+      // La contraseña se guarda en Firebase Authentication, nunca en Firestore.
+      const uid = await createAuthAccountAsAdmin(firebaseConfig, newUser.email, newUser.password);
+      await setDoc(doc(db, "salespeople", uid), {
+        name: newUser.name.trim(),
+        email: newUser.email.trim().toLowerCase(),
+        status: "Activo",
+        createdAt: serverTimestamp()
+      });
+      setIsDialogOpen(false);
+      setNewUser({ name: "", email: "", password: "" });
+      toast({ title: "Vendedor registrado", description: "La cuenta fue creada en Firebase Authentication." });
+    } catch (err: any) {
+      toast({ title: "No se pudo crear la cuenta", description: authErrorMessage(err), variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-    addDoc(collection(db, "salespeople"), userData)
-      .then(() => {
-        setIsDialogOpen(false);
-        setNewUser({ name: "", email: "", password: "" });
-        toast({ title: "Vendedor registrado", description: "La cuenta ha sido creada exitosamente en Firestore." });
-      })
-      .catch(async () => {
-        errorEmitter.emit("permission-error", new FirestorePermissionError({ 
-          path: "salespeople", 
-          operation: "create", 
-          requestResourceData: userData 
+  /** Migra un vendedor antiguo (contraseña en texto plano en Firestore) a una cuenta de Firebase Auth. */
+  const handleMigrate = async (person: any) => {
+    if (!db) return;
+    setMigratingId(person.id);
+    try {
+      const uid = await createAuthAccountAsAdmin(firebaseConfig, person.email, String(person.password || ""));
+      await setDoc(doc(db, "salespeople", uid), {
+        name: person.name || "",
+        email: String(person.email || "").trim().toLowerCase(),
+        status: person.status || "Activo",
+        createdAt: person.createdAt || serverTimestamp(),
+        migratedAt: serverTimestamp()
+      });
+      await deleteDoc(doc(db, "salespeople", person.id));
+      toast({ title: "Cuenta migrada", description: `${person.name} ya puede ingresar con su misma contraseña.` });
+    } catch (err: any) {
+      const msg = err?.code === "auth/weak-password"
+        ? "Su contraseña actual tiene menos de 6 caracteres. Elimine este registro y créelo de nuevo con una contraseña más larga."
+        : authErrorMessage(err);
+      toast({ title: "No se pudo migrar", description: msg, variant: "destructive" });
+    } finally {
+      setMigratingId(null);
+    }
+  };
+
+  const handleToggleStatus = (person: any) => {
+    if (!db) return;
+    const status = person.status === "Activo" ? "Inactivo" : "Activo";
+    updateDoc(doc(db, "salespeople", person.id), { status })
+      .then(() => toast({ title: status === "Activo" ? "Vendedor activado" : "Vendedor desactivado" }))
+      .catch(() => {
+        errorEmitter.emit("permission-error", new FirestorePermissionError({
+          path: `salespeople/${person.id}`,
+          operation: "update",
+          requestResourceData: { status }
         }));
-      })
-      .finally(() => setIsSaving(false));
+      });
   };
 
   const handleDelete = (id: string) => {
@@ -138,7 +175,7 @@ export default function SalespeoplePage() {
             <DialogHeader>
               <DialogTitle className="text-xl font-bold">Registrar Vendedor</DialogTitle>
               <DialogDescription>
-                Esta cuenta se guardará en tu Firestore y permitirá el acceso al panel de ventas.
+                Se creará una cuenta en Firebase Authentication con acceso al panel de ventas. Mínimo 6 caracteres de contraseña.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAddSalesperson} className="space-y-4 py-4">
@@ -228,7 +265,7 @@ export default function SalespeoplePage() {
                 <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
                   <TableHead className="px-6 font-bold uppercase text-[10px] tracking-widest text-slate-500">Vendedor</TableHead>
                   <TableHead className="font-bold uppercase text-[10px] tracking-widest text-slate-500">Email Acceso</TableHead>
-                  <TableHead className="font-bold uppercase text-[10px] tracking-widest text-slate-500">Contraseña</TableHead>
+                  <TableHead className="font-bold uppercase text-[10px] tracking-widest text-slate-500">Cuenta</TableHead>
                   <TableHead className="text-center font-bold uppercase text-[10px] tracking-widest text-slate-500">Estado</TableHead>
                   <TableHead className="w-[80px]"></TableHead>
                 </TableRow>
@@ -248,9 +285,30 @@ export default function SalespeoplePage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-slate-600 font-medium">{person.email}</TableCell>
-                      <TableCell className="font-mono text-xs text-slate-400 select-all">{person.password}</TableCell>
+                      <TableCell>
+                        {person.password ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 rounded-lg text-amber-700 border-amber-200 hover:bg-amber-50 text-xs font-bold"
+                            disabled={migratingId === person.id}
+                            onClick={() => handleMigrate(person)}
+                          >
+                            {migratingId === person.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <ShieldCheck className="h-3 w-3 mr-1" />}
+                            Migrar a cuenta segura
+                          </Button>
+                        ) : (
+                          <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                            <Lock className="h-3 w-3" /> Firebase Auth
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-center">
-                        <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200 uppercase text-[10px] font-bold tracking-tight">
+                        <Badge className={
+                          person.status === "Activo"
+                            ? "bg-emerald-500/10 text-emerald-600 border-emerald-200 uppercase text-[10px] font-bold tracking-tight"
+                            : "bg-amber-500/10 text-amber-700 border-amber-200 uppercase text-[10px] font-bold tracking-tight"
+                        }>
                           {person.status || "Activo"}
                         </Badge>
                       </TableCell>
@@ -263,6 +321,11 @@ export default function SalespeoplePage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-2xl">
                             <DropdownMenuLabel className="text-[10px] font-black uppercase text-slate-400">Acciones</DropdownMenuLabel>
+                            {!person.password && (
+                              <DropdownMenuItem className="cursor-pointer" onSelect={() => handleToggleStatus(person)}>
+                                <ShieldCheck className="mr-3 h-4 w-4" /> {person.status === "Activo" ? "Desactivar" : "Activar"}
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem className="text-destructive focus:bg-destructive/5 cursor-pointer" onSelect={(e) => { e.preventDefault(); handleDelete(person.id); }}>
                               <Trash2 className="mr-3 h-4 w-4" /> Eliminar Acceso
                             </DropdownMenuItem>

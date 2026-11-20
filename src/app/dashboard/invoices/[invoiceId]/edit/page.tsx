@@ -63,6 +63,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useCedulaSearch } from "@/hooks/useCedulaSearch";
 import { generateBillingPDF, getBillingPDFBase64, generateThermalPDF } from "@/lib/pdf-service";
 import { sendBillingEmail } from "@/app/actions/email-actions";
+import { isConsumidorFinalInvoice as checkConsumidorFinal } from "@/lib/invoice-utils";
 import { emitirFacturaAction, firmarXmlAction, recepcionarSriAction, autorizarSriAction } from "@/app/actions/sri-actions";
 import { generateInvoiceXML, generateCreditNoteXML, downloadXML } from "@/lib/sri-xml-service";
 import { format } from "date-fns";
@@ -110,6 +111,7 @@ export default function EditInvoicePage() {
   const [productSearch, setProductSearch] = useState("");
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
   const [showAnnulDialog, setShowAnnulDialog] = useState(false);
+  const [showConsumidorFinalAnnulModal, setShowConsumidorFinalAnnulModal] = useState(false);
   
   const [currentStatus, setCurrentStatus] = useState("Pendiente");
   const [authDate, setAuthDate] = useState<string | null>(null);
@@ -162,7 +164,11 @@ export default function EditInvoicePage() {
 
   const isAuthorized = currentStatus === 'Autorizado';
   const isAnnulled = currentStatus === 'Anulada';
-  const isReadOnly = isAuthorized || isAnnulled;
+  // Los vendedores solo pueden ver la factura: editar, emitir de nuevo o anular es del administrador.
+  const [isSeller] = useState(() => {
+    try { return typeof window !== 'undefined' && localStorage.getItem('amec_user_role') !== 'admin'; } catch { return true; }
+  });
+  const isReadOnly = isAuthorized || isAnnulled || isSeller;
 
   const subtotal15 = useMemo(() => {
     return items.reduce((acc, item) => {
@@ -346,8 +352,18 @@ export default function EditInvoicePage() {
     } finally { if (!isSilent) setLoadingAction(null); }
   };
 
+  const isConsumidorFinalInvoice = useMemo(
+    () => checkConsumidorFinal(invoice, { ruc: clientData.ruc, name: clientData.name }),
+    [clientData.ruc, clientData.name, invoice]
+  );
+
   const handleAnnul = async () => {
     if (!invoiceRef || !isAuthorized) return;
+    if (isConsumidorFinalInvoice) {
+      setShowAnnulDialog(false);
+      setShowConsumidorFinalAnnulModal(true);
+      return;
+    }
     
     setLoadingAction('annul');
     try {
@@ -359,9 +375,11 @@ export default function EditInvoicePage() {
         ptoEmi: taxConfig.ptoEmi,
         secuencial: "999" + invoice.invoiceNumber.split("-")[2].substring(3), 
         fechaEmision: format(new Date(), "dd/MM/yyyy"),
+        regimen: taxConfig.regimen,
         cliente: {
           razonSocial: clientData.name,
-          identificacion: clientData.ruc
+          identificacion: clientData.ruc,
+          email: clientData.email || undefined
         },
         items: items.filter(i => i.description.trim() !== "").map(i => ({
           descripcion: i.description,
@@ -661,8 +679,19 @@ export default function EditInvoicePage() {
               <span>RIDE</span>
             </Button>
             
-            {isAuthorized && !isAnnulled && (
-              <Button variant="outline" className="text-amber-600 border-amber-200 hover:bg-amber-50" onClick={() => setShowAnnulDialog(true)} disabled={loadingAction !== null}>
+            {isAuthorized && !isAnnulled && !isSeller && (
+              <Button
+                variant="outline"
+                className="text-amber-600 border-amber-200 hover:bg-amber-50"
+                onClick={() => {
+                  if (isConsumidorFinalInvoice) {
+                    setShowConsumidorFinalAnnulModal(true);
+                  } else {
+                    setShowAnnulDialog(true);
+                  }
+                }}
+                disabled={loadingAction !== null}
+              >
                 <Ban className="mr-2 h-4 w-4" />
                 <span>Anular Factura (NC)</span>
               </Button>
@@ -983,6 +1012,39 @@ export default function EditInvoicePage() {
             </div>
           </Card>
         </div>
+
+        <AlertDialog open={showConsumidorFinalAnnulModal} onOpenChange={setShowConsumidorFinalAnnulModal}>
+          <AlertDialogContent className="rounded-2xl">
+            <AlertDialogHeader>
+              <div className="mx-auto h-12 w-12 bg-rose-100 rounded-full flex items-center justify-center mb-4">
+                <Ban className="h-6 w-6 text-rose-600" />
+              </div>
+              <AlertDialogTitle className="text-center text-rose-700">No se puede emitir Nota de Crédito a Consumidor Final</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="text-center space-y-4">
+                  <p className="text-sm text-slate-600">
+                    La factura <span className="font-bold text-slate-900">#{invoice?.invoiceNumber}</span> fue emitida a <span className="font-bold text-slate-900">Consumidor Final (9999999999999)</span> o no cuenta con datos reales del cliente.
+                  </p>
+                  <div className="bg-rose-50 p-3.5 rounded-xl border border-rose-200 text-xs text-left space-y-1.5">
+                    <p className="font-bold text-rose-800">Restricción del SRI:</p>
+                    <ul className="list-disc pl-4 space-y-1 text-rose-700">
+                      <li>El SRI no permite emitir Notas de Crédito a Consumidor Final.</li>
+                      <li>La Nota de Crédito requiere datos reales del cliente (Cédula, RUC o Pasaporte y Nombre/Razón Social). Para revertir esta venta, consulte la anulación del comprobante en SRI en Línea.</li>
+                    </ul>
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="sm:justify-center mt-4">
+              <AlertDialogAction
+                onClick={() => setShowConsumidorFinalAnnulModal(false)}
+                className="rounded-xl bg-slate-900 hover:bg-slate-800 text-white px-8"
+              >
+                Entendido
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <AlertDialog open={showAnnulDialog} onOpenChange={(open) => !open && !loadingAction && setShowAnnulDialog(false)}>
           <AlertDialogContent className="rounded-2xl" asChild>

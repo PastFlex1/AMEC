@@ -53,3 +53,11 @@ electron_err.log
 err.txt
 out.txt
 tmp-asar-extract/  
+# Claves y credenciales (nunca subir al repo)
+ssh-keygen*
+id_rsa*
+id_ed25519*
+*.p12
+*.pfx
+*.key
+!.env.example

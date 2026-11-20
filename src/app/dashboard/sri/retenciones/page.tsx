@@ -56,12 +56,14 @@ import {
 import { downloadXML } from "@/lib/sri-xml-service";
 import { generateRetentionPDF } from "@/lib/pdf-service";
 import { DEFAULT_TAX_CONFIG, TaxConfig } from "@/lib/config-helper";
-import { 
-  validarRetencion, 
-  firmarRetencion, 
-  recepcionarRetencion, 
-  autorizarRetencion 
-} from "@/services/retencionService";
+// Se usan Server Actions: el navegador nunca llama directo al servicio de firma,
+// y el servidor verifica la sesión antes de firmar.
+import {
+  validarRetencionAction as validarRetencion,
+  firmarRetencionAction as firmarRetencion,
+  recepcionarRetencionAction as recepcionarRetencion,
+  autorizarRetencionAction as autorizarRetencion
+} from "@/app/actions/sri-actions";
 
 // Estados del Flujo de Retención
 export type StateRetention = 

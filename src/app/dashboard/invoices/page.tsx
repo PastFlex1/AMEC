@@ -10,6 +10,7 @@ import {
   Download,
   Eye,
   Loader2,
+  RefreshCw,
   Trash2,
   Hash,
   Edit2,
@@ -78,7 +79,9 @@ import { FirestorePermissionError } from "@/firebase/errors";
 import { generateBillingPDF, getBillingPDFBase64, generateThermalPDF } from "@/lib/pdf-service";
 import { generateInvoiceXML, generateCreditNoteXML, downloadXML } from "@/lib/sri-xml-service";
 import { sendBillingEmail } from "@/app/actions/email-actions";
-import { emitirFacturaAction } from "@/app/actions/sri-actions";
+import { isConsumidorFinalInvoice } from "@/lib/invoice-utils";
+import { creditNoteRideFromXml, generateCreditNotePDF, parseCreditNoteAuthorization } from "@/lib/credit-note-ride";
+import { emitirFacturaAction, autorizarSriAction } from "@/app/actions/sri-actions";
 
 const PAYMENT_METHODS = [
   { code: "01", label: "SIN UTILIZACIÓN DEL SISTEMA FINANCIERO" },
@@ -123,7 +126,9 @@ export default function InvoicesPage() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null);
   const [invoiceToAnnul, setInvoiceToAnnul] = useState<any | null>(null);
+  const [consumidorFinalAnnulInvoice, setConsumidorFinalAnnulInvoice] = useState<any | null>(null);
   const [loadingAnnul, setLoadingAnnul] = useState(false);
+  const [resendingNcId, setResendingNcId] = useState<string | null>(null);
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
@@ -460,34 +465,145 @@ export default function InvoicesPage() {
       });
   };
 
+  const isConsumidorFinalOrInvalidClient = (inv: any) => isConsumidorFinalInvoice(inv);
+
+  const handleRequestAnnul = (inv: any) => {
+    if (isConsumidorFinalOrInvalidClient(inv)) {
+      setConsumidorFinalAnnulInvoice(inv);
+      return;
+    }
+    setInvoiceToAnnul(inv);
+  };
+
+  /** XML de la Nota de Crédito que anula por completo la factura. */
+  const buildCreditNoteXml = (inv: any, fechaEmision?: string) =>
+    generateCreditNoteXML({
+      rucEmisor: taxConfig.ruc,
+      razonSocialEmisor: taxConfig.razonSocial,
+      dirMatriz: taxConfig.dirMatriz,
+      estab: taxConfig.estab,
+      ptoEmi: taxConfig.ptoEmi,
+      secuencial: "999" + inv.invoiceNumber.split("-")[2].substring(3),
+      fechaEmision: fechaEmision || format(new Date(), "dd/MM/yyyy"),
+      regimen: taxConfig.regimen,
+      cliente: {
+        razonSocial: inv.clientData?.name || inv.customerName,
+        identificacion: inv.clientData?.ruc || inv.customerRuc,
+        email: inv.clientData?.email || undefined
+      },
+      // Los ítems guardados en Firestore usan description/quantity/unitPrice;
+      // generateCreditNoteXML los normaliza (antes llegaban en $0 y sin descripción).
+      items: inv.items || [],
+      formaPago: inv.clientData?.paymentMethod || "01",
+      tipoComprobante: "04",
+      facturaModificada: {
+        numero: inv.invoiceNumber,
+        fecha: formatDocDate(inv.date)
+      }
+    });
+
+  /** Descarga el RIDE de la Nota de Crédito autorizada de una factura anulada. */
+  const handleDownloadCreditNoteRIDE = (inv: any) => {
+    try {
+      const emitter = {
+        name: taxConfig.razonSocial,
+        ruc: taxConfig.ruc,
+        address: taxConfig.dirMatriz,
+        phone: taxConfig.phone,
+        email: taxConfig.email,
+        regimen: taxConfig.regimen,
+        obligadoContabilidad: taxConfig.obligado_contabilidad ? "SI" : "NO",
+      };
+      const parsed = parseCreditNoteAuthorization(inv.creditNoteXml);
+      let xml = parsed.xml;
+
+      // Respaldo: si la respuesta guardada no trae el comprobante, se reconstruye con la
+      // misma fecha y secuencial de la clave de acceso (genera exactamente la misma clave).
+      const key = String(inv.creditNoteAccessKey || "");
+      if (!xml && /^\d{49}$/.test(key)) {
+        const fecha = `${key.slice(0, 2)}/${key.slice(2, 4)}/${key.slice(4, 8)}`;
+        xml = buildCreditNoteXml(inv, fecha);
+      }
+      const ride = xml
+        ? creditNoteRideFromXml(xml, {
+            emitter,
+            numeroAutorizacion: parsed.numeroAutorizacion || (/^\d{49}$/.test(key) ? key : undefined),
+            fechaAutorizacion: parsed.fechaAutorizacion,
+            clientEmail: inv.clientData?.email,
+          })
+        : null;
+
+      if (!ride) throw new Error("No se encontraron los datos de la Nota de Crédito autorizada.");
+      generateCreditNotePDF(ride);
+    } catch (error: any) {
+      toast({ title: "No se pudo generar el RIDE", description: error?.message, variant: "destructive" });
+    }
+  };
+
+  /**
+   * Reenvía al SRI la Nota de Crédito de una factura ya anulada.
+   * 1) Si hay una clave guardada y el SRI ya la tiene AUTORIZADA, solo actualiza el registro.
+   * 2) Si no, genera la NC de nuevo (formato corregido) y la envía.
+   * No toca el inventario: el stock ya se devolvió al anular.
+   */
+  const handleResendCreditNote = async (inv: any) => {
+    if (!db || resendingNcId) return;
+    setResendingNcId(inv.id);
+    try {
+      const storedKey = String(inv.creditNoteAccessKey || "");
+      if (/^\d{49}$/.test(storedKey)) {
+        const check = await autorizarSriAction(storedKey, 2, 1500);
+        if (check.success) {
+          await updateDoc(doc(db, "invoices", inv.id), {
+            creditNoteXml: check.autorizacion,
+            creditNoteStatus: "AUTORIZADO",
+            creditNoteError: null
+          });
+          toast({ title: "Nota de Crédito ya autorizada", description: `El SRI ya registra la NC de la factura #${inv.invoiceNumber}.` });
+          return;
+        }
+      }
+
+      const res = await emitirFacturaAction(buildCreditNoteXml(inv));
+      if (!res.success) {
+        throw new Error(res.error || "El SRI rechazó la Nota de Crédito.");
+      }
+
+      await updateDoc(doc(db, "invoices", inv.id), {
+        creditNoteAccessKey: res.claveAcceso,
+        creditNoteXml: res.autorizacion,
+        creditNoteStatus: "AUTORIZADO",
+        creditNoteError: null,
+        creditNoteResentAt: serverTimestamp(),
+        creditNoteResentBy: localStorage.getItem('amec_user_name') || 'Admin'
+      });
+      toast({ title: "Nota de Crédito autorizada", description: `La NC de la factura #${inv.invoiceNumber} ya está registrada en el SRI.` });
+    } catch (error: any) {
+      await updateDoc(doc(db, "invoices", inv.id), {
+        creditNoteStatus: "ERROR",
+        creditNoteError: String(error?.message || "Error desconocido").slice(0, 1000)
+      }).catch(() => {});
+      toast({ title: "No se pudo reenviar la Nota de Crédito", description: error?.message, variant: "destructive" });
+    } finally {
+      setResendingNcId(null);
+    }
+  };
+
   const handleAnnul = async () => {
     if (!db || !invoiceToAnnul) return;
+
+    if (isConsumidorFinalOrInvalidClient(invoiceToAnnul)) {
+      const inv = invoiceToAnnul;
+      setInvoiceToAnnul(null);
+      setConsumidorFinalAnnulInvoice(inv);
+      return;
+    }
     
     setLoadingAnnul(true);
     try {
-      const ncXml = generateCreditNoteXML({
-        rucEmisor: taxConfig.ruc,
-        razonSocialEmisor: taxConfig.razonSocial,
-        dirMatriz: taxConfig.dirMatriz,
-        estab: taxConfig.estab,
-        ptoEmi: taxConfig.ptoEmi,
-        secuencial: "999" + invoiceToAnnul.invoiceNumber.split("-")[2].substring(3), 
-        fechaEmision: format(new Date(), "dd/MM/yyyy"),
-        cliente: {
-          razonSocial: invoiceToAnnul.clientData?.name || invoiceToAnnul.customerName,
-          identificacion: invoiceToAnnul.clientData?.ruc || invoiceToAnnul.customerRuc
-        },
-        items: invoiceToAnnul.items,
-        formaPago: invoiceToAnnul.clientData?.paymentMethod || "01",
-        tipoComprobante: "04",
-        facturaModificada: {
-          numero: invoiceToAnnul.invoiceNumber,
-          fecha: formatDocDate(invoiceToAnnul.date)
-        }
-      });
-
+      const ncXml = buildCreditNoteXml(invoiceToAnnul);
       const res = await emitirFacturaAction(ncXml);
-      
+
       if (!res.success) {
         throw new Error(res.error || "El SRI rechazó la Nota de Crédito de anulación.");
       }
@@ -497,7 +613,9 @@ export default function InvoicesPage() {
         annulledAt: serverTimestamp(),
         annulledBy: localStorage.getItem('amec_user_name') || 'Admin',
         creditNoteAccessKey: res.claveAcceso,
-        creditNoteXml: res.autorizacion
+        creditNoteXml: res.autorizacion,
+        creditNoteStatus: "AUTORIZADO",
+        creditNoteError: null
       });
 
       // Restaurar el stock de los productos
@@ -731,6 +849,16 @@ export default function InvoicesPage() {
                           <Badge variant="outline" className={cn("rounded-lg font-black text-[10px] uppercase tracking-wider px-3 py-1", getStatusStyle(inv.status))}>
                             {inv.status || 'Pendiente'}
                           </Badge>
+                          {isAnnulled && inv.creditNoteStatus === 'AUTORIZADO' && (
+                            <div className="mt-1 text-[10px] font-bold text-emerald-600">
+                              NC autorizada SRI
+                            </div>
+                          )}
+                          {isAnnulled && inv.creditNoteStatus === 'ERROR' && (
+                            <div className="mt-1 text-[10px] font-bold text-rose-600" title={inv.creditNoteError || ''}>
+                              NC no registrada en SRI
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           {(() => {
@@ -779,7 +907,7 @@ export default function InvoicesPage() {
 
                               <DropdownMenuItem asChild className="rounded-xl cursor-pointer py-3">
                                 <Link href={`/dashboard/invoices/${inv.id}/edit`}>
-                                  {isAuthorized || isAnnulled ? (
+                                  {isAuthorized || isAnnulled || userRole !== 'admin' ? (
                                     <><Eye className="mr-3 h-4 w-4 text-primary" /> Ver Comprobante</>
                                   ) : (
                                     <><Edit2 className="mr-3 h-4 w-4 text-primary" /> Editar Datos</>
@@ -799,12 +927,12 @@ export default function InvoicesPage() {
                                 </>
                               )}
                               
-                              {(isAuthorized && !isAnnulled) && (
+                              {(userRole === 'admin' && isAuthorized && !isAnnulled) && (
                                 <>
                                   <DropdownMenuSeparator className="my-2" />
-                                  <DropdownMenuItem 
+                                  <DropdownMenuItem
                                     className="rounded-xl cursor-pointer py-3 text-amber-600 hover:bg-amber-50 font-bold"
-                                    onSelect={() => setInvoiceToAnnul(inv)}
+                                    onSelect={() => handleRequestAnnul(inv)}
                                   >
                                     <Ban className="mr-3 h-4 w-4" /> Anular Factura (NC)
                                   </DropdownMenuItem>
@@ -814,6 +942,25 @@ export default function InvoicesPage() {
                               {isAnnulled && (
                                 <>
                                   <DropdownMenuSeparator className="my-2" />
+                                  {inv.creditNoteStatus === 'AUTORIZADO' ? (
+                                    <DropdownMenuItem
+                                      className="rounded-xl cursor-pointer py-3 text-emerald-700 hover:bg-emerald-50 font-bold"
+                                      onSelect={() => handleDownloadCreditNoteRIDE(inv)}
+                                    >
+                                      <FileText className="mr-3 h-4 w-4" /> RIDE Nota de Crédito
+                                    </DropdownMenuItem>
+                                  ) : userRole === 'admin' && (
+                                    <DropdownMenuItem
+                                      className="rounded-xl cursor-pointer py-3 text-amber-600 hover:bg-amber-50 font-bold"
+                                      disabled={resendingNcId !== null}
+                                      onSelect={() => handleResendCreditNote(inv)}
+                                    >
+                                      {resendingNcId === inv.id
+                                        ? <Loader2 className="mr-3 h-4 w-4 animate-spin" />
+                                        : <RefreshCw className="mr-3 h-4 w-4" />}
+                                      Reenviar Nota de Crédito al SRI
+                                    </DropdownMenuItem>
+                                  )}
                                   <DropdownMenuItem disabled className="opacity-50 grayscale py-3 px-3">
                                     <Lock className="mr-3 h-4 w-4" /> Documento Anulado
                                   </DropdownMenuItem>
@@ -991,6 +1138,40 @@ export default function InvoicesPage() {
             <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl">
               Sí, eliminar registro
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Alerta de Bloqueo de Anulación para Consumidor Final */}
+      <AlertDialog open={!!consumidorFinalAnnulInvoice} onOpenChange={(open) => !open && setConsumidorFinalAnnulInvoice(null)}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <div className="h-12 w-12 bg-rose-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+              <Ban className="h-6 w-6 text-rose-600" />
+            </div>
+            <AlertDialogTitle className="text-center text-rose-700">No se puede emitir Nota de Crédito a Consumidor Final</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="text-center space-y-4">
+                <p className="text-sm text-slate-600">
+                  La factura <span className="font-bold text-slate-900">#{consumidorFinalAnnulInvoice?.invoiceNumber}</span> fue emitida a <span className="font-bold text-slate-900">Consumidor Final (9999999999999)</span> o no cuenta con datos reales del cliente.
+                </p>
+                <div className="bg-rose-50 p-3.5 rounded-xl border border-rose-200 text-xs text-left space-y-1.5">
+                  <p className="font-bold text-rose-800">Restricción del SRI:</p>
+                  <ul className="list-disc pl-4 space-y-1 text-rose-700">
+                    <li>El SRI no permite emitir Notas de Crédito a Consumidor Final.</li>
+                    <li>La Nota de Crédito requiere datos reales del cliente (Cédula, RUC o Pasaporte y Nombre/Razón Social). Para revertir esta venta, consulte la anulación del comprobante en SRI en Línea.</li>
+                  </ul>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:justify-center">
+            <AlertDialogAction
+              onClick={() => setConsumidorFinalAnnulInvoice(null)}
+              className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl px-8"
+            >
+              Entendido
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

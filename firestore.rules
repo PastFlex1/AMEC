@@ -1,36 +1,148 @@
 rules_version = '2';
 
+// Reglas de seguridad de Apm Inox.
+// - Administrador: usuario de Firebase Auth con documento admins/{uid} (se crea a mano en la consola).
+//   Puede leer, crear, editar y eliminar todo.
+// - Vendedor: usuario de Firebase Auth con salespeople/{uid} y status == "Activo".
+//   Puede LEER y CREAR en sus secciones (facturas, notas de venta, proformas, productos, caja),
+//   pero NO puede editar ni eliminar. Solo se le permiten las actualizaciones automáticas
+//   que necesita una venta: descontar/devolver stock, terminar de emitir un documento recién
+//   creado (autorización SRI) y registrar abonos.
+// Nadie sin sesión puede leer ni escribir nada.
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Reglas explícitas para las colecciones del sistema Apm Inox
-    
-    match /products/{productId} {
-      allow read, write: if true;
-    }
-    
-    match /customers/{customerId} {
-      allow read, write: if true;
-    }
-    
-    match /invoices/{invoiceId} {
-      allow read, write: if true;
+
+    // ---------- Quién es quién ----------
+
+    function signedIn() {
+      return request.auth != null;
     }
 
-    match /proformas/{proformaId} {
-      allow read, write: if true;
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    match /salesNotes/{salesNoteId} {
-      allow read, write: if true;
+    function isActiveSeller() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/salespeople/$(request.auth.uid))
+        && get(/databases/$(database)/documents/salespeople/$(request.auth.uid)).data.status == 'Activo';
     }
-    
-    match /salespeople/{salespersonId} {
-      allow read, write: if true;
+
+    function isStaff() {
+      return isAdmin() || isActiveSeller();
     }
-    
-    // Regla por defecto para cualquier otra ruta
-    match /{document=**} {
-      allow read, write: if true;
+
+    // ---------- Ayudas para vendedores ----------
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
     }
+
+    // Al crear, createdAt debe ser la hora del servidor (no se puede adelantar ni atrasar).
+    function createdNow() {
+      return request.resource.data.get('createdAt', null) == request.time;
+    }
+
+    // Ventana para terminar de emitir un documento recién creado (firma y autorización SRI,
+    // descontar stock, reintentar el guardado). Pasado este tiempo el vendedor ya no lo puede editar.
+    function withinIssueWindow() {
+      return resource.data.get('createdAt', null) is timestamp
+        && request.time < resource.data.createdAt + duration.value(30, 'm')
+        && !changedKeys().hasAny(['createdAt', 'createdBy'])
+        && request.resource.data.get('status', '') != 'Anulada';
+    }
+
+    // Registrar un abono: solo cambia deposit/balance/updatedAt y el abono no puede bajar.
+    function isPaymentOnly() {
+      return changedKeys().hasOnly(['deposit', 'balance', 'updatedAt'])
+        && request.resource.data.get('deposit', 0) >= resource.data.get('deposit', 0);
+    }
+
+    // ---------- Usuarios ----------
+
+    // Administradores: cada uno puede leer su propio documento. Solo se crean/editan desde la consola.
+    match /admins/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Vendedores
+    match /salespeople/{uid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+
+      // Auto-registro: solo su propio documento, siempre "Pendiente" y sin contraseña.
+      allow create: if isAdmin() || (
+        signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.status == 'Pendiente'
+        && request.resource.data.keys().hasOnly(['name', 'email', 'status', 'createdAt'])
+      );
+
+      // Solo el administrador activa, desactiva o elimina vendedores.
+      allow update, delete: if isAdmin();
+    }
+
+    // ---------- Secciones del vendedor ----------
+
+    // Productos: el vendedor crea; solo puede cambiar el stock (ventas y devoluciones).
+    match /products/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff();
+      allow update: if isAdmin() || (isActiveSeller() && changedKeys().hasOnly(['stock']));
+      allow delete: if isAdmin();
+    }
+
+    // Facturas, notas de venta y proformas.
+    match /invoices/{id} {
+      allow read: if isStaff();
+      allow create: if isAdmin() || (isActiveSeller() && createdNow());
+      allow update: if isAdmin() || (isActiveSeller() && (withinIssueWindow() || isPaymentOnly()));
+      allow delete: if isAdmin();
+    }
+
+    match /salesNotes/{id} {
+      allow read: if isStaff();
+      allow create: if isAdmin() || (isActiveSeller() && createdNow());
+      allow update: if isAdmin() || (isActiveSeller() && (withinIssueWindow() || isPaymentOnly()));
+      allow delete: if isAdmin();
+    }
+
+    match /proformas/{id} {
+      allow read: if isStaff();
+      allow create: if isAdmin() || (isActiveSeller() && createdNow());
+      allow update: if isAdmin() || (isActiveSeller() && (withinIssueWindow() || isPaymentOnly()));
+      allow delete: if isAdmin();
+    }
+
+    // Clientes: se crean automáticamente al facturar; editar/eliminar solo el administrador.
+    match /customers/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff();
+      allow update, delete: if isAdmin();
+    }
+
+    // Abonos: el vendedor los registra pero no los cambia ni borra.
+    match /payments/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff();
+      allow update, delete: if isAdmin();
+    }
+
+    // Cierre de caja: el sistema lo recalcula al vender, por eso el vendedor puede guardarlo.
+    match /cashClosings/{id} {
+      allow read: if isStaff();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    // ---------- Secciones solo del administrador ----------
+
+    match /inventoryIntakes/{id} { allow read: if isStaff(); allow write: if isAdmin(); }
+    match /retenciones/{id}      { allow read: if isStaff(); allow write: if isAdmin(); }
+    match /taxConfig/{id}        { allow read: if isStaff(); allow write: if isAdmin(); }
+    match /investments/{id}      { allow read, write: if isAdmin(); }
+
+    // Cualquier otra ruta queda bloqueada.
   }
 }

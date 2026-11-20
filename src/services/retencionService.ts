@@ -15,6 +15,13 @@ const getBaseUrl = (): string => {
   return "https://api-sri-production.up.railway.app";
 };
 
+/** Debe ejecutarse solo en el servidor (vía Server Actions): SRI_API_TOKEN no es público. */
+function sriHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const headers: Record<string, string> = { ...extra };
+  if (process.env.SRI_API_TOKEN) headers['Authorization'] = `Bearer ${process.env.SRI_API_TOKEN}`;
+  return headers;
+}
+
 export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
@@ -35,7 +42,7 @@ export async function validarRetencion(xml: string): Promise<ApiResponse> {
     const baseUrl = getBaseUrl();
     const response = await fetch(`${baseUrl}/api/retenciones/validar`, {
       method: "POST",
-      headers: { "Content-Type": "text/plain" },
+      headers: sriHeaders({ "Content-Type": "text/plain" }),
       body: xml
     });
 
@@ -66,7 +73,7 @@ export async function firmarRetencion(xml: string): Promise<ApiResponse> {
     const baseUrl = getBaseUrl();
     const response = await fetch(`${baseUrl}/api/retenciones/firmar`, {
       method: "POST",
-      headers: { "Content-Type": "text/plain" },
+      headers: sriHeaders({ "Content-Type": "text/plain" }),
       body: xml
     });
 
@@ -107,7 +114,7 @@ export async function recepcionarRetencion(xmlFirmado: string): Promise<ApiRespo
     const baseUrl = getBaseUrl();
     const response = await fetch(`${baseUrl}/api/retenciones/recepcion`, {
       method: "POST",
-      headers: { "Content-Type": "text/plain" },
+      headers: sriHeaders({ "Content-Type": "text/plain" }),
       body: xmlFirmado
     });
 
@@ -143,7 +150,7 @@ export async function autorizarRetencion(claveAcceso: string, retries = 3, delay
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const response = await fetch(`${baseUrl}/api/retenciones/autorizacion/${claveAcceso}`);
+      const response = await fetch(`${baseUrl}/api/retenciones/autorizacion/${claveAcceso}`, { headers: sriHeaders(), cache: "no-store" });
 
       if (response.ok) {
         const autorizacion = await response.text();

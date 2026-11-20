@@ -6,6 +6,28 @@ import {
   recepcionarRetencion,
   autorizarRetencion
 } from '@/services/retencionService';
+import { getStaffSession } from '@/lib/server-auth';
+
+interface SriResult {
+  success: boolean;
+  error?: string;
+  xmlFirmado?: string;
+  claveAcceso?: string;
+  recepcion?: string;
+  autorizacion?: string;
+  data?: any;
+  estado?: string;
+}
+
+const UNAUTHORIZED: SriResult = { success: false, error: 'Sesión no válida. Vuelva a iniciar sesión.' };
+const CLAVE_ACCESO_RE = /^\d{49}$/;
+
+/** Cabeceras para el servicio de firma en Railway; SRI_API_TOKEN debe exigirse también en ese servicio. */
+function sriHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const headers: Record<string, string> = { ...extra };
+  if (process.env.SRI_API_TOKEN) headers['Authorization'] = `Bearer ${process.env.SRI_API_TOKEN}`;
+  return headers;
+}
 
 /**
  * @fileOverview Acciones de servidor para el proceso del SRI (Ecuador).
@@ -25,14 +47,15 @@ const getBaseUrl = (): string => {
   return "https://api-sri-production.up.railway.app";
 };
 
-export async function firmarXmlAction(xml: string) {
+export async function firmarXmlAction(xml: string): Promise<SriResult> {
+  if (!(await getStaffSession())) return UNAUTHORIZED;
   try {
     const baseUrl = getBaseUrl();
     const resFirma = await fetch(
       `${baseUrl}/api/sri/firmar`,
       {
         method: "POST",
-        headers: { "Content-Type": "text/plain" },
+        headers: sriHeaders({ "Content-Type": "text/plain" }),
         body: xml
       }
     );
@@ -76,14 +99,15 @@ function extractSriMessages(rawText: string): string {
   return rawText.length > 300 ? rawText.slice(0, 300) + '...' : rawText;
 }
 
-export async function recepcionarSriAction(xmlFirmado: string) {
+export async function recepcionarSriAction(xmlFirmado: string): Promise<SriResult> {
+  if (!(await getStaffSession())) return UNAUTHORIZED;
   try {
     const baseUrl = getBaseUrl();
     const resRecepcion = await fetch(
       `${baseUrl}/api/sri/recepcion`,
       {
         method: "POST",
-        headers: { "Content-Type": "text/plain" },
+        headers: sriHeaders({ "Content-Type": "text/plain" }),
         body: xmlFirmado
       }
     );
@@ -115,14 +139,21 @@ export async function recepcionarSriAction(xmlFirmado: string) {
   }
 }
 
-export async function autorizarSriAction(claveAcceso: string, retries = 5, delayMs = 2500) {
+export async function autorizarSriAction(claveAcceso: string, retries = 5, delayMs = 2500): Promise<SriResult> {
+  if (!(await getStaffSession())) return UNAUTHORIZED;
+  if (!CLAVE_ACCESO_RE.test(String(claveAcceso || ''))) {
+    return { success: false, error: 'Clave de acceso inválida (deben ser 49 dígitos).' };
+  }
+  // Límites para que un cliente no pueda dejar la acción esperando indefinidamente.
+  retries = Math.min(Math.max(1, Math.floor(Number(retries) || 1)), 10);
+  delayMs = Math.min(Math.max(0, Number(delayMs) || 0), 5000);
   const baseUrl = getBaseUrl();
   let lastError = "No se pudo consultar la autorización legal definitiva en el SRI.";
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const resAutorizacion = await fetch(
         `${baseUrl}/api/sri/autorizacion/${claveAcceso}`,
-        { cache: "no-store" }
+        { cache: "no-store", headers: sriHeaders() }
       );
 
       if (resAutorizacion.ok) {
@@ -180,7 +211,7 @@ export async function autorizarSriAction(claveAcceso: string, retries = 5, delay
   return { success: false, error: lastError };
 }
 
-export async function emitirFacturaAction(xml: string) {
+export async function emitirFacturaAction(xml: string): Promise<SriResult> {
   try {
     console.log("[SRI Action] Iniciando proceso de emisión...");
 
@@ -210,11 +241,13 @@ export async function emitirFacturaAction(xml: string) {
   }
 }
 
-export async function validarRetencionAction(xml: string) {
+export async function validarRetencionAction(xml: string): Promise<SriResult> {
+  if (!(await getStaffSession())) return UNAUTHORIZED;
   return await validarRetencion(xml);
 }
 
-export async function firmarRetencionAction(xml: string) {
+export async function firmarRetencionAction(xml: string): Promise<SriResult> {
+  if (!(await getStaffSession())) return UNAUTHORIZED;
   const res = await firmarRetencion(xml);
   if (!res.success) {
     return { success: false, error: res.error };
@@ -226,7 +259,8 @@ export async function firmarRetencionAction(xml: string) {
   };
 }
 
-export async function recepcionarRetencionAction(xmlFirmado: string) {
+export async function recepcionarRetencionAction(xmlFirmado: string): Promise<SriResult> {
+  if (!(await getStaffSession())) return UNAUTHORIZED;
   const res = await recepcionarRetencion(xmlFirmado);
   if (!res.success) {
     return { success: false, error: res.error };
@@ -234,15 +268,21 @@ export async function recepcionarRetencionAction(xmlFirmado: string) {
   return { success: true, recepcion: res.recepcion };
 }
 
-export async function autorizarRetencionAction(claveAcceso: string, retries = 3, delayMs = 2000) {
+export async function autorizarRetencionAction(claveAcceso: string, retries = 3, delayMs = 2000): Promise<SriResult> {
+  if (!(await getStaffSession())) return UNAUTHORIZED;
+  if (!CLAVE_ACCESO_RE.test(String(claveAcceso || ''))) {
+    return { success: false, error: 'Clave de acceso inválida (deben ser 49 dígitos).' };
+  }
+  retries = Math.min(Math.max(1, Math.floor(Number(retries) || 1)), 10);
+  delayMs = Math.min(Math.max(0, Number(delayMs) || 0), 5000);
   const res = await autorizarRetencion(claveAcceso, retries, delayMs);
   if (!res.success) {
-    return { success: false, error: res.error };
+    return { success: false, error: res.error, autorizacion: res.autorizacion };
   }
   return { success: true, autorizacion: res.autorizacion };
 }
 
-export async function emitirRetencionAction(xml: string) {
+export async function emitirRetencionAction(xml: string): Promise<SriResult> {
   try {
     console.log("[SRI Action] Iniciando proceso de emisión de retención...");
 

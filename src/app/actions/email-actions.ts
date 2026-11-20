@@ -1,6 +1,29 @@
 'use server';
 
 import nodemailer from 'nodemailer';
+import { requireStaff, UnauthorizedError } from '@/lib/server-auth';
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function safeFilePart(value: unknown): string {
+  return String(value ?? '').replace(/[^\w.-]+/g, '_').slice(0, 80) || 'documento';
+}
+
+const EMAIL_RE = /^[^\s@<>",;]+@[^\s@<>",;]+\.[^\s@<>",;]+$/;
+
+/** Las credenciales SOLO se leen de variables de entorno (.env.local o secretos de App Hosting). */
+function getSmtpCredentials() {
+  const user = process.env.GMAIL_USER || process.env.SMTP_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || process.env.SMTP_PASS;
+  return { user, pass };
+}
 
 export interface EmailData {
   to: string;
@@ -18,8 +41,7 @@ export interface EmailData {
  * Servidor de transporte reutilizable o inicializado bajo demanda para Gmail SMTP.
  */
 function createGmailTransporter() {
-  const user = process.env.GMAIL_USER || process.env.SMTP_USER || 'apm.inox.cotocollao@gmail.com';
-  const pass = process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || process.env.SMTP_PASS || 'wjcnubfvhqgwffhe';
+  const { user, pass } = getSmtpCredentials();
 
   if (!user || !pass) {
     throw new Error(
@@ -43,8 +65,14 @@ function createGmailTransporter() {
  * Acción de servidor para enviar correos electrónicos con comprobantes adjuntos (PDF + XML) mediante Gmail SMTP.
  */
 export async function sendBillingEmail(data: EmailData) {
-  const user = process.env.GMAIL_USER || process.env.SMTP_USER || 'apm.inox.cotocollao@gmail.com';
-  const pass = process.env.GMAIL_APP_PASSWORD || process.env.GMAIL_PASS || process.env.SMTP_PASS || 'wjcnubfvhqgwffhe';
+  try {
+    await requireStaff();
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return { success: false, error: err.message };
+    throw err;
+  }
+
+  const { user, pass } = getSmtpCredentials();
 
   if (!user || !pass) {
     console.error('[Email Action] Variables GMAIL_USER o GMAIL_APP_PASSWORD no detectadas.');
@@ -57,7 +85,7 @@ export async function sendBillingEmail(data: EmailData) {
   try {
     const { to, subject, clientName, docType, total, docNumber, pdfBase64, xmlContent, observations } = data;
 
-    if (!to || !to.includes('@')) {
+    if (!to || !EMAIL_RE.test(to.trim())) {
       return { success: false, error: 'La dirección de correo del destinatario es inválida.' };
     }
 
@@ -76,7 +104,7 @@ export async function sendBillingEmail(data: EmailData) {
     if (pdfBase64) {
       const cleanBase64 = pdfBase64.includes('base64,') ? pdfBase64.split('base64,')[1] : pdfBase64;
       attachments.push({
-        filename: `${docType.replace(/\s/g, '_')}_${docNumber}.pdf`,
+        filename: `${safeFilePart(docType)}_${safeFilePart(docNumber)}.pdf`,
         content: Buffer.from(cleanBase64, 'base64'),
         contentType: 'application/pdf',
       });
@@ -85,7 +113,7 @@ export async function sendBillingEmail(data: EmailData) {
     // Si recibimos el XML, lo adjuntamos también
     if (xmlContent) {
       attachments.push({
-        filename: `${docType.replace(/\s/g, '_')}_${docNumber}.xml`,
+        filename: `${safeFilePart(docType)}_${safeFilePart(docNumber)}.xml`,
         content: xmlContent,
         contentType: 'application/xml',
       });
@@ -94,25 +122,25 @@ export async function sendBillingEmail(data: EmailData) {
     const mailOptions = {
       from: `"${fromName}" <${fromAddress}>`,
       to: to.trim(),
-      subject: subject,
+      subject: String(subject ?? '').replace(/[\r\n]+/g, ' ').slice(0, 200),
       attachments,
       html: `
         <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 12px;">
-          <h2 style="color: #2988a3;">${docType} Electrónica</h2>
-          <p>Estimado(a) <strong>${clientName}</strong>,</p>
+          <h2 style="color: #2988a3;">${escapeHtml(docType)} Electrónica</h2>
+          <p>Estimado(a) <strong>${escapeHtml(clientName)}</strong>,</p>
           <p>Se ha generado un nuevo documento electrónico a su nombre. Adjunto encontrará los archivos correspondientes.</p>
           
           <div style="background: #f8fafc; padding: 20px; border-radius: 10px; margin: 20px 0; border: 1px solid #e2e8f0;">
-            <p style="margin: 5px 0;"><strong>Tipo:</strong> ${docType}</p>
-            <p style="margin: 5px 0;"><strong>Número:</strong> ${docNumber}</p>
-            <p style="margin: 5px 0;"><strong>Monto Total:</strong> $${total.toFixed(2)}</p>
+            <p style="margin: 5px 0;"><strong>Tipo:</strong> ${escapeHtml(docType)}</p>
+            <p style="margin: 5px 0;"><strong>Número:</strong> ${escapeHtml(docNumber)}</p>
+            <p style="margin: 5px 0;"><strong>Monto Total:</strong> $${Number(total || 0).toFixed(2)}</p>
             
             ${
               observations
                 ? `
               <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e2e8f0;">
                 <p style="margin: 0; color: #64748b; font-size: 12px; font-weight: bold; text-transform: uppercase;">Observaciones:</p>
-                <p style="margin: 5px 0 0 0; color: #334155; font-style: italic;">${observations}</p>
+                <p style="margin: 5px 0 0 0; color: #334155; font-style: italic;">${escapeHtml(observations)}</p>
               </div>
             `
                 : ''
@@ -151,6 +179,7 @@ export async function sendBillingEmail(data: EmailData) {
  */
 export async function verifyEmailConnection() {
   try {
+    await requireStaff();
     const transporter = createGmailTransporter();
     await transporter.verify();
     return { success: true, message: 'Conexión con Gmail SMTP establecida correctamente.' };

@@ -126,16 +126,7 @@ export function generateInvoiceXML(data: SRIInvoiceData): string {
   const valorIVA = Object.values(taxGroups).reduce((acc, g) => acc + g.valor, 0);
   const totalConImpuestosCalculado = subtotalTotal + valorIVA;
 
-  let tipoId = "05";
-  const idStr = data.cliente.identificacion || "";
-
-  if (idStr === "9999999999999") {
-    tipoId = "07";
-  } else if (idStr.length === 13) {
-    tipoId = "04";
-  } else if (idStr.length === 10) {
-    tipoId = "05";
-  }
+  const tipoId = getTipoIdentificacion(data.cliente.identificacion);
 
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
   xml += `<factura id="comprobante" version="1.1.0">\n\n`;
@@ -159,9 +150,9 @@ export function generateInvoiceXML(data: SRIInvoiceData): string {
   xml += `        <dirEstablecimiento>${data.dirMatriz}</dirEstablecimiento>\n`;
   xml += `        <obligadoContabilidad>${data.obligadoContabilidad || "NO"}</obligadoContabilidad>\n`;
   xml += `        <tipoIdentificacionComprador>${tipoId}</tipoIdentificacionComprador>\n`;
-  xml += `        <razonSocialComprador>${data.cliente.razonSocial}</razonSocialComprador>\n`;
-  xml += `        <identificacionComprador>${data.cliente.identificacion}</identificacionComprador>\n`;
-  xml += `        <direccionComprador>${data.cliente.direccion || "S/N"}</direccionComprador>\n`;
+  xml += `        <razonSocialComprador>${xmlEscape(data.cliente.razonSocial)}</razonSocialComprador>\n`;
+  xml += `        <identificacionComprador>${xmlEscape(data.cliente.identificacion)}</identificacionComprador>\n`;
+  xml += `        <direccionComprador>${xmlEscape(data.cliente.direccion || "S/N")}</direccionComprador>\n`;
   xml += `        <totalSinImpuestos>${safe(subtotalTotal).toFixed(2)}</totalSinImpuestos>\n`;
   xml += `        <totalDescuento>0.00</totalDescuento>\n\n`;
 
@@ -199,7 +190,7 @@ export function generateInvoiceXML(data: SRIInvoiceData): string {
     
     xml += `        <detalle>\n`;
     xml += `            <codigoPrincipal>${item.codigo || (index + 1).toString().padStart(3, '0')}</codigoPrincipal>\n`;
-    xml += `            <descripcion>${item.descripcion}</descripcion>\n`;
+    xml += `            <descripcion>${xmlEscape(item.descripcion)}</descripcion>\n`;
     xml += `            <cantidad>${safe(item.cantidad).toFixed(2)}</cantidad>\n`;
     xml += `            <precioUnitario>${unitPriceSinIva.toFixed(6)}</precioUnitario>\n`;
     xml += `            <descuento>0.00</descuento>\n`;
@@ -251,94 +242,160 @@ export function generateCreditNoteXML(data: SRIInvoiceData): string {
     tipoComprobante: "04"
   });
 
-  // Cálculos robustos con la solución PRO
-  const subtotal = (data.items || []).reduce(
-    (acc, i) => acc + (safe(i.cantidad) * safe(i.precioUnitario)),
-    0
-  );
+  // Acepta ítems con nombres del SRI (descripcion/cantidad/precioUnitario)
+  // o tal como se guardan en Firestore (description/quantity/unitPrice).
+  const items = normalizeItems(data.items);
 
-  const total = (data.items || []).reduce(
-    (acc, i) => acc + (safe(i.cantidad) * safe(i.precioUnitario)),
-    0
-  );
+  // Mismo cálculo que la factura: el precio guardado incluye IVA cuando la tarifa es 15%.
+  // Así el valor de la Nota de Crédito coincide exactamente con la factura modificada.
+  // El esquema notaCredito v1.0.0 solo admite 2 decimales en cantidad y precioUnitario.
+  // Para que cantidad × precioUnitario − descuento = precioTotalSinImpuesto (exacto, igual a la factura),
+  // el precio sin IVA se redondea hacia arriba y la diferencia de centavos va en "descuento".
+  const lines = items.map((item, index) => {
+    const mapping = getIvaMapping(item.ivaRate);
+    const cantidad = round2(item.cantidad);
+    const totalLine = item.cantidad * item.precioUnitario;
+    const baseRaw = mapping.tarifa === "15" ? totalLine / 1.15 : totalLine;
+    const tax = mapping.tarifa === "15" ? totalLine - baseRaw : 0;
+    const base = round2(baseRaw);
+    const unitSinIva = cantidad > 0 ? Math.ceil(round6(base / cantidad) * 100) / 100 : round2(item.precioUnitario);
+    const descuento = Math.max(0, round2(cantidad * unitSinIva - base));
+    return { item, index, mapping, cantidad, base, baseRaw, tax, unitSinIva, descuento };
+  });
 
-  let tipoId = "05";
-  const idStr = data.cliente.identificacion || "";
-  if (idStr === "9999999999999") {
-    tipoId = "07";
-  } else if (idStr.length === 13) {
-    tipoId = "04";
-  }
+  const taxGroups: { [key: string]: { base: number; valor: number; codigoPorcentaje: string } } = {};
+  lines.forEach(({ mapping, baseRaw, tax }) => {
+    const key = mapping.codigoPorcentaje;
+    if (!taxGroups[key]) taxGroups[key] = { base: 0, valor: 0, codigoPorcentaje: key };
+    taxGroups[key].base += baseRaw;
+    taxGroups[key].valor += tax;
+  });
 
+  const subtotal = Object.values(taxGroups).reduce((acc, g) => acc + g.base, 0);
+  const iva = Object.values(taxGroups).reduce((acc, g) => acc + g.valor, 0);
+  const total = subtotal + iva;
+
+  const tipoId = getTipoIdentificacion(data.cliente.identificacion);
+
+  // El orden de los elementos sigue el esquema XSD oficial notaCredito v1.0.0 del SRI
+  // (el servicio de firma exige version="1.0.0").
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
-  xml += `<notaCredito id="comprobante" version="1.0.0">\n\n`;
+  xml += `<notaCredito id="comprobante" version="1.0.0">\n`;
 
   xml += `    <infoTributaria>\n`;
   xml += `        <ambiente>2</ambiente>\n`;
   xml += `        <tipoEmision>1</tipoEmision>\n`;
-  xml += `        <razonSocial>${data.razonSocialEmisor}</razonSocial>\n`;
-  xml += `        <nombreComercial>${data.nombreComercialEmisor || "Apm Inox"}</nombreComercial>\n`;
+  xml += `        <razonSocial>${xmlEscape(data.razonSocialEmisor)}</razonSocial>\n`;
+  xml += `        <nombreComercial>${xmlEscape(data.nombreComercialEmisor || "Apm Inox")}</nombreComercial>\n`;
   xml += `        <ruc>${data.rucEmisor}</ruc>\n`;
   xml += `        <claveAcceso>${claveAcceso}</claveAcceso>\n`;
   xml += `        <codDoc>04</codDoc>\n`;
   xml += `        <estab>${data.estab.padStart(3, "0")}</estab>\n`;
   xml += `        <ptoEmi>${data.ptoEmi.padStart(3, "0")}</ptoEmi>\n`;
   xml += `        <secuencial>${data.secuencial.padStart(9, "0")}</secuencial>\n`;
-  xml += `        <dirMatriz>${data.dirMatriz}</dirMatriz>\n`;
-  xml += `    </infoTributaria>\n\n`;
+  xml += `        <dirMatriz>${xmlEscape(data.dirMatriz)}</dirMatriz>\n`;
+  xml += `    </infoTributaria>\n`;
 
   xml += `    <infoNotaCredito>\n`;
   xml += `        <fechaEmision>${data.fechaEmision}</fechaEmision>\n`;
-  xml += `        <dirEstablecimiento>${data.dirMatriz}</dirEstablecimiento>\n`;
+  xml += `        <dirEstablecimiento>${xmlEscape(data.dirMatriz)}</dirEstablecimiento>\n`;
   xml += `        <tipoIdentificacionComprador>${tipoId}</tipoIdentificacionComprador>\n`;
-  xml += `        <razonSocialComprador>${data.cliente.razonSocial}</razonSocialComprador>\n`;
-  xml += `        <identificacionComprador>${data.cliente.identificacion}</identificacionComprador>\n`;
-  xml += `        <totalSinImpuestos>${safe(subtotal).toFixed(2)}</totalSinImpuestos>\n`;
-  xml += `        <valorModificacion>${safe(total).toFixed(2)}</valorModificacion>\n`;
-  xml += `        <moneda>DOLAR</moneda>\n`;
+  xml += `        <razonSocialComprador>${xmlEscape(data.cliente.razonSocial)}</razonSocialComprador>\n`;
+  xml += `        <identificacionComprador>${xmlEscape(String(data.cliente.identificacion || "").trim())}</identificacionComprador>\n`;
+  xml += `        <obligadoContabilidad>${data.obligadoContabilidad || "NO"}</obligadoContabilidad>\n`;
   xml += `        <codDocModificado>01</codDocModificado>\n`;
   xml += `        <numDocModificado>${data.facturaModificada?.numero}</numDocModificado>\n`;
   xml += `        <fechaEmisionDocSustento>${data.facturaModificada?.fecha}</fechaEmisionDocSustento>\n`;
-  xml += `    </infoNotaCredito>\n\n`;
+  xml += `        <totalSinImpuestos>${subtotal.toFixed(2)}</totalSinImpuestos>\n`;
+  xml += `        <valorModificacion>${total.toFixed(2)}</valorModificacion>\n`;
+  xml += `        <moneda>DOLAR</moneda>\n`;
+  xml += `        <totalConImpuestos>\n`;
+  Object.values(taxGroups).forEach(group => {
+    xml += `            <totalImpuesto>\n`;
+    xml += `                <codigo>2</codigo>\n`;
+    xml += `                <codigoPorcentaje>${group.codigoPorcentaje}</codigoPorcentaje>\n`;
+    xml += `                <baseImponible>${group.base.toFixed(2)}</baseImponible>\n`;
+    xml += `                <valor>${group.valor.toFixed(2)}</valor>\n`;
+    xml += `            </totalImpuesto>\n`;
+  });
+  xml += `        </totalConImpuestos>\n`;
+  xml += `        <motivo>${xmlEscape(data.observaciones || "ANULACION DE FACTURA")}</motivo>\n`;
+  xml += `    </infoNotaCredito>\n`;
 
   xml += `    <detalles>\n`;
-  (data.items || []).forEach((item) => {
-    const base = safe(item.cantidad) * safe(item.precioUnitario);
+  lines.forEach(({ item, index, mapping, cantidad, base, tax, unitSinIva, descuento }) => {
     xml += `        <detalle>\n`;
-    xml += `            <descripcion>${item.descripcion}</descripcion>\n`;
-    xml += `            <cantidad>${safe(item.cantidad).toFixed(2)}</cantidad>\n`;
-    xml += `            <precioUnitario>${safe(item.precioUnitario).toFixed(6)}</precioUnitario>\n`;
-    xml += `            <descuento>0.00</descuento>\n`;
-    xml += `            <precioTotalSinImpuesto>${safe(base).toFixed(2)}</precioTotalSinImpuesto>\n`;
+    xml += `            <codigoInterno>${xmlEscape(String(item.codigo || (index + 1).toString().padStart(3, "0")).slice(0, 25))}</codigoInterno>\n`;
+    xml += `            <descripcion>${xmlEscape(item.descripcion)}</descripcion>\n`;
+    xml += `            <cantidad>${cantidad.toFixed(2)}</cantidad>\n`;
+    xml += `            <precioUnitario>${unitSinIva.toFixed(2)}</precioUnitario>\n`;
+    xml += `            <descuento>${descuento.toFixed(2)}</descuento>\n`;
+    xml += `            <precioTotalSinImpuesto>${base.toFixed(2)}</precioTotalSinImpuesto>\n`;
+    xml += `            <impuestos>\n`;
+    xml += `                <impuesto>\n`;
+    xml += `                    <codigo>2</codigo>\n`;
+    xml += `                    <codigoPorcentaje>${mapping.codigoPorcentaje}</codigoPorcentaje>\n`;
+    xml += `                    <tarifa>${mapping.tarifa}</tarifa>\n`;
+    xml += `                    <baseImponible>${base.toFixed(2)}</baseImponible>\n`;
+    xml += `                    <valor>${tax.toFixed(2)}</valor>\n`;
+    xml += `                </impuesto>\n`;
+    xml += `            </impuestos>\n`;
     xml += `        </detalle>\n`;
   });
-  xml += `    </detalles>\n\n`;
+  xml += `    </detalles>\n`;
 
-  xml += `    <motivos>\n`;
-  xml += `        <motivo>\n`;
-  xml += `            <razon>Anulación de factura</razon>\n`;
-  xml += `            <valor>${safe(total).toFixed(2)}</valor>\n`;
-  xml += `        </motivo>\n`;
-  xml += `    </motivos>\n\n`;
-
-  const additionalFields = [];
+  const additionalFields: Array<{ name: string; value: string }> = [];
   if (data.regimen && data.regimen.toUpperCase().includes("RIMPE")) {
     additionalFields.push({ name: "contribuyenteRimpe", value: "CONTRIBUYENTE RÉGIMEN RIMPE" });
   }
   if (data.cliente.email) additionalFields.push({ name: "email", value: data.cliente.email });
   if (data.cliente.telefono) additionalFields.push({ name: "telefono", value: data.cliente.telefono });
-  if (data.observaciones) additionalFields.push({ name: "observaciones", value: data.observaciones });
+  if (data.cliente.direccion) additionalFields.push({ name: "direccion", value: data.cliente.direccion });
 
   if (additionalFields.length > 0) {
     xml += `    <infoAdicional>\n`;
     additionalFields.forEach(field => {
-      xml += `        <campoAdicional nombre="${field.name}">${field.value}</campoAdicional>\n`;
+      xml += `        <campoAdicional nombre="${field.name}">${xmlEscape(field.value)}</campoAdicional>\n`;
     });
-    xml += `    </infoAdicional>\n\n`;
+    xml += `    </infoAdicional>\n`;
   }
 
   xml += `</notaCredito>`;
   return xml;
+}
+
+/** Escapa caracteres especiales de XML (un "&" en un nombre hace que el SRI rechace el comprobante). */
+export function xmlEscape(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+/** Tabla 6 del SRI: 04 RUC, 05 Cédula, 06 Pasaporte, 07 Consumidor Final. */
+export function getTipoIdentificacion(identificacion: string | undefined): string {
+  const id = String(identificacion || "").trim();
+  if (/^9{13}$/.test(id)) return "07";
+  if (/^\d{13}$/.test(id)) return "04";
+  if (/^\d{10}$/.test(id)) return "05";
+  return "06";
+}
+
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+const round6 = (n: number) => Math.round((n + Number.EPSILON) * 1e6) / 1e6;
+
+function normalizeItems(items: any[] | undefined) {
+  return (items || [])
+    .map((i: any) => ({
+      codigo: i.codigo || i.code || i.productCode || undefined,
+      descripcion: String(i.descripcion ?? i.description ?? i.name ?? "").trim(),
+      cantidad: safe(i.cantidad ?? i.quantity),
+      precioUnitario: safe(i.precioUnitario ?? i.unitPrice ?? i.price),
+      ivaRate: i.ivaRate,
+    }))
+    .filter(i => i.descripcion !== "" && i.cantidad > 0);
 }
 
 /**

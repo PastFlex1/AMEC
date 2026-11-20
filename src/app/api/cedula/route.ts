@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getStaffSession } from '@/lib/server-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,9 @@ async function fetchSriJson(url: string, headers: Record<string, string>, timeou
 }
 
 export async function GET(request: Request) {
+  if (!(await getStaffSession())) {
+    return NextResponse.json({ success: false, message: 'No autorizado.' }, { status: 401 });
+  }
   try {
     const { searchParams } = new URL(request.url);
     const rawId = searchParams.get('identificacion') || searchParams.get('cedula') || searchParams.get('ruc') || '';

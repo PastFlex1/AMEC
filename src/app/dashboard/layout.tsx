@@ -20,31 +20,48 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { useAuth, useFirestore } from "@/firebase";
+import { resolveStaffProfile, storeProfileForUi } from "@/firebase/auth/staff";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const auth = useAuth();
+  const db = useFirestore();
   const [role, setRole] = useState<'admin' | 'sales' | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const checkAuth = () => {
-      const savedRole = localStorage.getItem('amec_user_role') as any;
-      if (!savedRole) {
-        router.push('/login');
-      } else {
-        setRole(savedRole);
+    // La sesión la decide Firebase Auth; el rol se lee de Firestore (admins/{uid} o salespeople/{uid}).
+    let cancelled = false;
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        storeProfileForUi(null);
+        if (!cancelled) router.replace('/login');
+        return;
       }
-      // Tiempo de carga optimizado para permitir la sincronización inicial de Firebase
-      const timer = setTimeout(() => setIsLoading(false), 1000);
-      return () => clearTimeout(timer);
+      const profile = await resolveStaffProfile(db, user.uid);
+      if (cancelled) return;
+      if (!profile) {
+        storeProfileForUi(null);
+        await signOut(auth).catch(() => {});
+        router.replace('/login');
+        return;
+      }
+      storeProfileForUi(profile);
+      setRole(profile.role);
+      setIsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
     };
+  }, [auth, db, router]);
 
-    checkAuth();
-  }, [router]);
-
-  const handleLogout = () => {
-    localStorage.removeItem('amec_user_role');
+  const handleLogout = async () => {
+    storeProfileForUi(null);
+    await signOut(auth).catch(() => {});
     router.push('/login');
   };
 

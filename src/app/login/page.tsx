@@ -12,13 +12,17 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShieldCheck, User, LogIn, Loader2, UserPlus, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useFirestore } from "@/firebase";
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
+import { useAuth, useFirestore } from "@/firebase";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from "firebase/auth";
+import { authErrorMessage, resolveStaffProfile, storeProfileForUi } from "@/firebase/auth/staff";
+import { refreshSessionCookie } from "@/firebase/auth/session-cookie";
 
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
   const db = useFirestore();
+  const auth = useAuth();
   const [role, setRole] = useState<'admin' | 'sales'>('admin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,40 +36,37 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      if (role === 'admin') {
-        if (email === 'administrador@amecindustrias.com' && password === 'amec123') {
-          localStorage.setItem('amec_user_role', 'admin');
-          localStorage.setItem('amec_user_name', 'Administrador');
-          router.push('/dashboard/admin');
-          toast({ title: "Bienvenido, Administrador", description: "Acceso concedido." });
-        } else {
-          throw new Error("Credenciales de administrador incorrectas.");
-        }
-      } else {
-        const salespeopleRef = collection(db, "salespeople");
-        const q = query(
-          salespeopleRef,
-          where("email", "==", email),
-          where("password", "==", password),
-          where("status", "==", "Activo")
-        );
-        const querySnapshot = await getDocs(q);
+      const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const profile = await resolveStaffProfile(db, cred.user.uid);
 
-        if (!querySnapshot.empty) {
-          const userData = querySnapshot.docs[0].data();
-          localStorage.setItem('amec_user_role', 'sales');
-          localStorage.setItem('amec_user_name', userData.name || 'Vendedor');
-          router.push('/dashboard/sales');
-          toast({ title: "Bienvenido, Vendedor", description: "Acceso verificado desde Firestore." });
-        } else {
-          throw new Error("Vendedor no encontrado o cuenta inactiva.");
-        }
+      if (!profile) {
+        await signOut(auth);
+        storeProfileForUi(null);
+        throw new Error("Su cuenta no tiene acceso o está pendiente de aprobación por el administrador.");
+      }
+
+      await refreshSessionCookie(auth);
+      storeProfileForUi(profile);
+
+      if (profile.role !== role) {
+        toast({
+          title: "Rol detectado automáticamente",
+          description: profile.role === 'admin' ? "Ingresando como Administrador." : "Ingresando como Vendedor.",
+        });
+      }
+
+      if (profile.role === 'admin') {
+        router.push('/dashboard/admin');
+        toast({ title: "Bienvenido, Administrador", description: "Acceso concedido." });
+      } else {
+        router.push('/dashboard/sales');
+        toast({ title: `Bienvenido, ${profile.name}`, description: "Acceso verificado." });
       }
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Error de acceso",
-        description: error.message || "No se pudo iniciar sesión.",
+        description: error?.code ? authErrorMessage(error) : (error.message || "No se pudo iniciar sesión."),
       });
     } finally {
       setLoading(false);
@@ -81,36 +82,30 @@ export default function LoginPage() {
         throw new Error("Todos los campos son obligatorios.");
       }
 
-      const salespeopleRef = collection(db, "salespeople");
-
-      const q = query(salespeopleRef, where("email", "==", email));
-      const querySnapshot = await getDocs(q);
-
-      if (!querySnapshot.empty) {
-        throw new Error("Este correo ya está registrado.");
-      }
-
-      const userData = {
-        name,
-        email,
-        password,
-        status: "Activo",
+      // La contraseña la guarda Firebase Authentication (cifrada); Firestore solo guarda nombre, correo y estado.
+      const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      await updateProfile(cred.user, { displayName: name.trim() }).catch(() => {});
+      await setDoc(doc(db, "salespeople", cred.user.uid), {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        status: "Pendiente",
         createdAt: serverTimestamp()
-      };
-
-      await addDoc(salespeopleRef, userData);
+      });
+      await signOut(auth);
+      storeProfileForUi(null);
 
       toast({
-        title: "Cuenta creada",
-        description: "Ya puedes iniciar sesión como vendedor con tus credenciales."
+        title: "Solicitud enviada",
+        description: "Su cuenta fue creada y queda pendiente hasta que el administrador la active."
       });
 
       setName('');
+      setPassword('');
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Error de registro",
-        description: error.message || "No se pudo crear la cuenta.",
+        description: error?.code ? authErrorMessage(error) : (error.message || "No se pudo crear la cuenta."),
       });
     } finally {
       setLoading(false);
@@ -294,7 +289,7 @@ export default function LoginPage() {
                     </div>
                   </div>
                   <p className="text-[10px] text-muted-foreground italic px-1 bg-amber-50 p-2 rounded-lg border border-amber-100">
-                    Nota: Al registrarte, tu cuenta quedará vinculada automáticamente a la base de datos de Apm Inox.
+                    Nota: Tu cuenta quedará pendiente hasta que el administrador la active. La contraseña debe tener al menos 6 caracteres.
                   </p>
                 </CardContent>
                 <CardFooter className="bg-slate-50/50 border-t border-slate-100 pt-6">

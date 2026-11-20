@@ -435,11 +435,13 @@ export default function ProformasPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2 shadow-2xl border-gray-100">
                             <DropdownMenuLabel className="text-[10px] font-black uppercase text-gray-400 px-3 py-2">Gestión de Proforma</DropdownMenuLabel>
-                            <DropdownMenuItem asChild className="rounded-xl cursor-pointer py-3 hover:bg-indigo-50 focus:bg-indigo-50">
-                              <Link href={`/dashboard/proformas/${prof.id}/edit`}>
-                                <Edit2 className="mr-3 h-4 w-4 text-indigo-600" /> Editar Proforma
-                              </Link>
-                            </DropdownMenuItem>
+                            {userRole === 'admin' && (
+                              <DropdownMenuItem asChild className="rounded-xl cursor-pointer py-3 hover:bg-indigo-50 focus:bg-indigo-50">
+                                <Link href={`/dashboard/proformas/${prof.id}/edit`}>
+                                  <Edit2 className="mr-3 h-4 w-4 text-indigo-600" /> Editar Proforma
+                                </Link>
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem 
                               className="rounded-xl cursor-pointer py-3 hover:bg-indigo-50 focus:bg-indigo-50" 
                               onSelect={(e) => { e.preventDefault(); openDetails(prof); }}

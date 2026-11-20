@@ -516,11 +516,13 @@ export default function SalesNotesPage() {
                             >
                               <Eye className="mr-2 h-4 w-4" /> Ver Detalles
                             </DropdownMenuItem>
-                            <DropdownMenuItem asChild>
-                              <Link href={`/dashboard/sales-notes/${note.id}/edit`}>
-                                <Edit2 className="mr-2 h-4 w-4" /> Editar Nota
-                              </Link>
-                            </DropdownMenuItem>
+                            {userRole === 'admin' && (
+                              <DropdownMenuItem asChild>
+                                <Link href={`/dashboard/sales-notes/${note.id}/edit`}>
+                                  <Edit2 className="mr-2 h-4 w-4" /> Editar Nota
+                                </Link>
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem 
                               className="cursor-pointer text-primary"
                               onSelect={(e) => { e.preventDefault(); handleDownloadPDF(note); }}

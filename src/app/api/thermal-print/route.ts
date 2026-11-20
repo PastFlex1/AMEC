@@ -5,6 +5,7 @@ import util from 'util';
 import path from 'path';
 import os from 'os';
 import { buildPlainTextTMU220, buildTicketTMU220Buffer } from '@/lib/escpos-service';
+import { getStaffSession } from '@/lib/server-auth';
 
 const execAsync = util.promisify(exec);
 
@@ -20,6 +21,9 @@ const POSSIBLE_LINUX_DEVICES = [
 ];
 
 export async function POST(request: Request) {
+  if (!(await getStaffSession())) {
+    return NextResponse.json({ success: false, message: 'No autorizado.' }, { status: 401 });
+  }
   try {
     const { searchParams } = new URL(request.url);
     const format = searchParams.get('format');
